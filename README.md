@@ -228,3 +228,21 @@ npm run build
 **Built with ❤️ by the Open-Lovable team**
 
 [🌐 Live Demo](https://open-lovable-nine.vercel.app) | [📚 Documentation](https://docs.openlovable.com) | [💬 Community](https://discord.gg/openlovable)
+
+## Troubleshooting
+
+- Missing or invalid keys will now return 401 from API routes with clear messages.
+- Validate your environment quickly:
+
+```bash
+curl -sS "$NEXT_PUBLIC_APP_URL/api/debug" | jq
+```
+
+- Required keys:
+  - E2B_API_KEY must start with `e2b_`
+  - FIRECRAWL_API_KEY must be present for scraping endpoints
+
+If you still see 401s:
+- Recheck the values in your deployment provider’s environment settings.
+- Redeploy or restart the dev server after setting keys.
+- The browser console may show: "[createSandbox] Error: 401 Invalid API key"; this now maps to a 401 response from `/api/create-ai-sandbox`.

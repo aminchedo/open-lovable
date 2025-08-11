@@ -2010,14 +2010,10 @@ Tip: I automatically detect and install npm packages from your code imports (lik
         body: JSON.stringify({ url })
       });
       
-      if (!scrapeResponse.ok) {
-        throw new Error(`Scraping failed: ${scrapeResponse.status}`);
-      }
-      
-      const scrapeData = await scrapeResponse.json();
-      
-      if (!scrapeData.success) {
-        throw new Error(scrapeData.error || 'Failed to scrape website');
+      const scrapeData = await scrapeResponse.json().catch(() => null);
+      if (!scrapeResponse.ok || !scrapeData?.success) {
+        const message = scrapeData?.error || `Scraping failed: ${scrapeResponse.status}`;
+        throw new Error(message);
       }
       
       addChatMessage(`Scraped ${scrapeData.content.length} characters from ${url}`, 'system');
@@ -2314,20 +2310,18 @@ Focus on the key sections and content, making it clean and modern while preservi
         body: JSON.stringify({ url })
       });
       
-      const data = await response.json();
-      if (data.success && data.screenshot) {
+      const data = await response.json().catch(() => null);
+      if (response.ok && data?.success && data?.screenshot) {
         setUrlScreenshot(data.screenshot);
-        // Set preparing design state
         setIsPreparingDesign(true);
-        // Store the clean URL for display
         const cleanUrl = url.replace(/^https?:\/\//i, '');
         setTargetUrl(cleanUrl);
-        // Switch to preview tab to show the screenshot
         if (activeTab !== 'preview') {
           setActiveTab('preview');
         }
       } else {
-        setScreenshotError(data.error || 'Failed to capture screenshot');
+        const message = data?.error || `Screenshot failed: ${response.status}`;
+        setScreenshotError(message);
       }
     } catch (error) {
       console.error('Failed to capture screenshot:', error);
@@ -2394,14 +2388,10 @@ Focus on the key sections and content, making it clean and modern while preservi
           body: JSON.stringify({ url })
         });
         
-        if (!scrapeResponse.ok) {
-          throw new Error('Failed to scrape website');
-        }
-        
-        const scrapeData = await scrapeResponse.json();
-        
-        if (!scrapeData.success) {
-          throw new Error(scrapeData.error || 'Failed to scrape website');
+        const scrapeData = await scrapeResponse.json().catch(() => null);
+        if (!scrapeResponse.ok || !scrapeData?.success) {
+          const message = scrapeData?.error || 'Failed to scrape website';
+          throw new Error(message);
         }
         
         setUrlStatus(['Website scraped successfully!', 'Generating React app...']);

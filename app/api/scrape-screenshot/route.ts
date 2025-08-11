@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         error: 'Firecrawl API key not configured',
         code: 'MISSING_FIRECRAWL_KEY',
-      }, { status: 500 });
+      }, { status: 401 });
     }
 
     // Use Firecrawl API to capture screenshot
@@ -40,14 +40,27 @@ export async function POST(req: NextRequest) {
     });
 
     if (!firecrawlResponse.ok) {
-      const error = await firecrawlResponse.text();
-      throw new Error(`Firecrawl API error: ${error}`);
+      const text = await firecrawlResponse.text();
+      const status = firecrawlResponse.status || 500;
+      if (status === 401 || status === 403) {
+        return NextResponse.json({
+          success: false,
+          error: 'Firecrawl authorization failed. Check FIRECRAWL_API_KEY.',
+          details: text,
+          code: 'FIRECRAWL_UNAUTHORIZED'
+        }, { status: 401 });
+      }
+      return NextResponse.json({
+        success: false,
+        error: `Firecrawl API error (${status})`,
+        details: text
+      }, { status });
     }
 
     const data = await firecrawlResponse.json();
 
     if (!data.success || !data.data?.screenshot) {
-      throw new Error('Failed to capture screenshot');
+      return NextResponse.json({ success: false, error: 'Failed to capture screenshot' }, { status: 502 });
     }
 
     return NextResponse.json({
