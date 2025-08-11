@@ -1,134 +1,101 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Function to sanitize smart quotes and other problematic characters
-function sanitizeQuotes(text: string): string {
-  return text
-    // Replace smart single quotes
-    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
-    // Replace smart double quotes
-    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
-    // Replace other quote-like characters
-    .replace(/[\u00AB\u00BB]/g, '"') // Guillemets
-    .replace(/[\u2039\u203A]/g, "'") // Single guillemets
-    // Replace other problematic characters
-    .replace(/[\u2013\u2014]/g, '-') // En dash and em dash
-    .replace(/[\u2026]/g, '...') // Ellipsis
-    .replace(/[\u00A0]/g, ' '); // Non-breaking space
+function isValidUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    return ['http:', 'https:'].includes(urlObj.protocol) && 
+           urlObj.hostname.includes('.') && 
+           urlObj.hostname.length > 3;
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(request: NextRequest) {
+  console.log('[scrape-url-enhanced] Starting enhanced scraping');
+  
   try {
-    const { url } = await request.json();
+    const firecrawlApiKey = process.env.FIRECRAWL_API_KEY;
+    
+    if (!firecrawlApiKey) {
+      return NextResponse.json(
+        { error: 'FIRECRAWL_API_KEY not configured', code: 'MISSING_KEY' },
+        { status: 500 }
+      );
+    }
+
+    const body = await request.json();
+    let { url, options = {} } = body;
     
     if (!url) {
-      return NextResponse.json({
-        success: false,
-        error: 'URL is required'
-      }, { status: 400 });
+      return NextResponse.json(
+        { error: 'URL is required', code: 'MISSING_URL' },
+        { status: 400 }
+      );
     }
-    
-    console.log('[scrape-url-enhanced] Scraping with Firecrawl:', url);
-    
-    const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
-    if (!FIRECRAWL_API_KEY) {
-      return NextResponse.json({
-        success: false,
-        error: 'FIRECRAWL_API_KEY environment variable is not set',
-        code: 'MISSING_FIRECRAWL_KEY'
-      }, { status: 401 });
-    }
-    
-    // Make request to Firecrawl API with maxAge for 500% faster scraping
-    const firecrawlResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        url,
-        formats: ['markdown', 'html'],
-        waitFor: 3000,
-        timeout: 30000,
-        blockAds: true,
-        maxAge: 3600000, // Use cached data if less than 1 hour old (500% faster!)
-        actions: [
-          {
-            type: 'wait',
-            milliseconds: 2000
-          }
-        ]
-      })
-    });
-    
-    if (!firecrawlResponse.ok) {
-      const text = await firecrawlResponse.text();
-      const status = firecrawlResponse.status || 500;
-      if (status === 401 || status === 403) {
-        return NextResponse.json({
-          success: false,
-          error: 'Firecrawl authorization failed. Check FIRECRAWL_API_KEY.',
-          details: text,
-          code: 'FIRECRAWL_UNAUTHORIZED'
-        }, { status: 401 });
-      }
-      return NextResponse.json({
-        success: false,
-        error: `Firecrawl API error (${status})`,
-        details: text
-      }, { status });
-    }
-    
-    const data = await firecrawlResponse.json();
-    
-    if (!data.success || !data.data) {
-      return NextResponse.json({ success: false, error: 'Failed to scrape content' }, { status: 502 });
-    }
-    
-    const { markdown, html, metadata } = data.data;
-    
-    // Sanitize the markdown content
-    const sanitizedMarkdown = sanitizeQuotes(markdown || '');
-    
-    // Extract structured data from the response
-    const title = metadata?.title || '';
-    const description = metadata?.description || '';
-    
-    // Format content for AI
-    const formattedContent = `
-Title: ${sanitizeQuotes(title)}
-Description: ${sanitizeQuotes(description)}
-URL: ${url}
 
-Main Content:
-${sanitizedMarkdown}
-    `.trim();
+    // Clean and format URL
+    url = url.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+
+    if (!isValidUrl(url)) {
+      return NextResponse.json(
+        { 
+          error: 'Invalid URL format', 
+          code: 'INVALID_URL',
+          message: 'Please provide a valid URL like https://example.com' 
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log('[scrape-url-enhanced] Processing URL:', url);
+
+    const { FirecrawlApp } = await import('@mendable/firecrawl-js');
+    const app = new FirecrawlApp({ apiKey: firecrawlApiKey });
     
+    const scrapeResponse = await app.scrapeUrl(url, {
+      formats: ['markdown', 'html'],
+      includeTags: ['title', 'meta'],
+      excludeTags: ['script', 'style'],
+      waitFor: 3000,
+      ...options,
+    });
+
+    console.log('[scrape-url-enhanced] Scraping completed successfully');
+
     return NextResponse.json({
       success: true,
-      url,
-      content: formattedContent,
-      structured: {
-        title: sanitizeQuotes(title),
-        description: sanitizeQuotes(description),
-        content: sanitizedMarkdown,
-        url
-      },
-      metadata: {
-        scraper: 'firecrawl-enhanced',
-        timestamp: new Date().toISOString(),
-        contentLength: formattedContent.length,
-        cached: data.data.cached || false, // Indicates if data came from cache
-        ...metadata
-      },
-      message: 'URL scraped successfully with Firecrawl (with caching for 500% faster performance)'
+      data: scrapeResponse,
+      url: url,
     });
+
+  } catch (error: any) {
+    console.error('[scrape-url-enhanced] Error:', error.message);
     
-  } catch (error) {
-    console.error('[scrape-url-enhanced] Error:', error);
-    return NextResponse.json({
-      success: false,
-      error: (error as Error).message
-    }, { status: 500 });
+    if (error.message?.includes('401') || error.message?.includes('Invalid API key')) {
+      return NextResponse.json(
+        { error: 'Invalid Firecrawl API key', code: 'INVALID_FIRECRAWL_KEY' },
+        { status: 401 }
+      );
+    }
+    
+    if (error.message?.includes('URL must have a valid top-level domain')) {
+      return NextResponse.json(
+        { 
+          error: 'Invalid URL domain', 
+          code: 'INVALID_URL_DOMAIN',
+          message: 'Please use a complete URL with valid domain' 
+        },
+        { status: 400 }
+      );
+    }
+    
+    return NextResponse.json(
+      { error: 'Scraping failed', code: 'SCRAPING_FAILED', message: error.message },
+      { status: 500 }
+    );
   }
 }

@@ -1,78 +1,98 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(req: NextRequest) {
+function isValidUrl(url: string): boolean {
   try {
-    const { url } = await req.json();
+    const urlObj = new URL(url);
+    return ['http:', 'https:'].includes(urlObj.protocol) && 
+           urlObj.hostname.includes('.') && 
+           urlObj.hostname.length > 3;
+  } catch {
+    return false;
+  }
+}
 
+export async function POST(request: NextRequest) {
+  console.log('[scrape-screenshot] Starting screenshot capture');
+  
+  try {
+    const firecrawlApiKey = process.env.FIRECRAWL_API_KEY;
+    
+    if (!firecrawlApiKey) {
+      return NextResponse.json(
+        { error: 'FIRECRAWL_API_KEY not configured', code: 'MISSING_KEY' },
+        { status: 500 }
+      );
+    }
+
+    const body = await request.json();
+    let { url } = body;
+    
     if (!url) {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'URL is required', code: 'MISSING_URL' },
+        { status: 400 }
+      );
     }
 
-    const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
-    if (!FIRECRAWL_API_KEY) {
-      console.error('FIRECRAWL_API_KEY not found in environment variables');
-      return NextResponse.json({
-        error: 'Firecrawl API key not configured',
-        code: 'MISSING_FIRECRAWL_KEY',
-      }, { status: 401 });
+    // Clean and format URL
+    url = url.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
     }
 
-    // Use Firecrawl API to capture screenshot
-    const firecrawlResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        url,
-        formats: ['screenshot'],
-        waitFor: 3000,
-        timeout: 30000,
-        blockAds: true,
-        actions: [
-          {
-            type: 'wait',
-            milliseconds: 2000
-          }
-        ]
-      })
+    if (!isValidUrl(url)) {
+      return NextResponse.json(
+        { 
+          error: 'Invalid URL format', 
+          code: 'INVALID_URL',
+          message: 'Please provide a valid URL like https://example.com' 
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log('[scrape-screenshot] Processing URL:', url);
+
+    const { FirecrawlApp } = await import('@mendable/firecrawl-js');
+    const app = new FirecrawlApp({ apiKey: firecrawlApiKey });
+    
+    const screenshotResponse = await app.screenshot(url, {
+      waitFor: 3000,
+      fullPage: true,
     });
 
-    if (!firecrawlResponse.ok) {
-      const text = await firecrawlResponse.text();
-      const status = firecrawlResponse.status || 500;
-      if (status === 401 || status === 403) {
-        return NextResponse.json({
-          success: false,
-          error: 'Firecrawl authorization failed. Check FIRECRAWL_API_KEY.',
-          details: text,
-          code: 'FIRECRAWL_UNAUTHORIZED'
-        }, { status: 401 });
-      }
-      return NextResponse.json({
-        success: false,
-        error: `Firecrawl API error (${status})`,
-        details: text
-      }, { status });
-    }
-
-    const data = await firecrawlResponse.json();
-
-    if (!data.success || !data.data?.screenshot) {
-      return NextResponse.json({ success: false, error: 'Failed to capture screenshot' }, { status: 502 });
-    }
+    console.log('[scrape-screenshot] Screenshot captured successfully');
 
     return NextResponse.json({
       success: true,
-      screenshot: data.data.screenshot,
-      metadata: data.data.metadata
+      screenshot: screenshotResponse.screenshot,
+      url: url,
     });
 
   } catch (error: any) {
-    console.error('Screenshot capture error:', error);
-    return NextResponse.json({
-      error: error.message || 'Failed to capture screenshot'
-    }, { status: 500 });
+    console.error('[scrape-screenshot] Error:', error.message);
+    
+    if (error.message?.includes('401') || error.message?.includes('Invalid API key')) {
+      return NextResponse.json(
+        { error: 'Invalid Firecrawl API key', code: 'INVALID_FIRECRAWL_KEY' },
+        { status: 401 }
+      );
+    }
+    
+    if (error.message?.includes('URL must have a valid top-level domain')) {
+      return NextResponse.json(
+        { 
+          error: 'Invalid URL domain', 
+          code: 'INVALID_URL_DOMAIN',
+          message: 'Please use a complete URL with valid domain (e.g., https://google.com)' 
+        },
+        { status: 400 }
+      );
+    }
+    
+    return NextResponse.json(
+      { error: 'Screenshot failed', code: 'SCREENSHOT_FAILED', message: error.message },
+      { status: 500 }
+    );
   }
 }
