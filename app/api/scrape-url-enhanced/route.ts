@@ -31,7 +31,11 @@ export async function POST(request: NextRequest) {
     
     const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
     if (!FIRECRAWL_API_KEY) {
-      throw new Error('FIRECRAWL_API_KEY environment variable is not set');
+      return NextResponse.json({
+        success: false,
+        error: 'FIRECRAWL_API_KEY environment variable is not set',
+        code: 'MISSING_FIRECRAWL_KEY'
+      }, { status: 401 });
     }
     
     // Make request to Firecrawl API with maxAge for 500% faster scraping
@@ -58,14 +62,27 @@ export async function POST(request: NextRequest) {
     });
     
     if (!firecrawlResponse.ok) {
-      const error = await firecrawlResponse.text();
-      throw new Error(`Firecrawl API error: ${error}`);
+      const text = await firecrawlResponse.text();
+      const status = firecrawlResponse.status || 500;
+      if (status === 401 || status === 403) {
+        return NextResponse.json({
+          success: false,
+          error: 'Firecrawl authorization failed. Check FIRECRAWL_API_KEY.',
+          details: text,
+          code: 'FIRECRAWL_UNAUTHORIZED'
+        }, { status: 401 });
+      }
+      return NextResponse.json({
+        success: false,
+        error: `Firecrawl API error (${status})`,
+        details: text
+      }, { status });
     }
     
     const data = await firecrawlResponse.json();
     
     if (!data.success || !data.data) {
-      throw new Error('Failed to scrape content');
+      return NextResponse.json({ success: false, error: 'Failed to scrape content' }, { status: 502 });
     }
     
     const { markdown, html, metadata } = data.data;

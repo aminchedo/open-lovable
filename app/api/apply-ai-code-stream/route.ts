@@ -309,7 +309,15 @@ export async function POST(request: NextRequest) {
           success: false,
           error: 'E2B API key not configured',
           code: 'MISSING_E2B_KEY'
-        }, { status: 500 });
+        }, { status: 401 });
+      }
+      if (!/^e2b_/.test(E2B_API_KEY)) {
+        console.error('E2B_API_KEY appears malformed. It should start with "e2b_"');
+        return NextResponse.json({
+          success: false,
+          error: 'Invalid E2B API key format. It should start with "e2b_"',
+          code: 'MALFORMED_E2B_KEY'
+        }, { status: 401 });
       }
       try {
         // Reconnect to the existing sandbox using E2B's connect method
@@ -332,24 +340,26 @@ export async function POST(request: NextRequest) {
         if (!global.existingFiles) {
           global.existingFiles = new Set<string>();
         }
-      } catch (reconnectError) {
+      } catch (reconnectError: any) {
+        const message = String(reconnectError?.message || reconnectError);
+        const isUnauthorized = message.includes('401') || /unauthor/i.test(message) || /invalid api key/i.test(message);
         console.error(`[apply-ai-code-stream] Failed to reconnect to sandbox ${sandboxId}:`, reconnectError);
         
-        // If reconnection fails, we'll still try to return a meaningful response
         return NextResponse.json({
           success: false,
-          error: `Failed to reconnect to sandbox ${sandboxId}. The sandbox may have expired or been terminated.`,
+          error: isUnauthorized ? 'E2B authorization failed. Check E2B_API_KEY.' : `Failed to reconnect to sandbox ${sandboxId}. The sandbox may have expired or been terminated.`,
+          code: isUnauthorized ? 'E2B_UNAUTHORIZED' : 'E2B_CONNECT_FAILED',
           results: {
             filesCreated: [],
             packagesInstalled: [],
             commandsExecuted: [],
-            errors: [`Sandbox reconnection failed: ${(reconnectError as Error).message}`]
+            errors: [`Sandbox reconnection failed: ${message}`]
           },
           explanation: parsed.explanation,
           structure: parsed.structure,
           parsedFiles: parsed.files,
           message: `Parsed ${parsed.files.length} files but couldn't apply them - sandbox reconnection failed.`
-        });
+        }, { status: isUnauthorized ? 401 : 500 });
       }
     }
     
@@ -701,16 +711,13 @@ print(f"File written: ${fullPath}")
     return new Response(stream.readable, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
       },
     });
     
-  } catch (error) {
-    console.error('Apply AI code stream error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to parse AI code' },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    console.error('[apply-ai-code-stream] Error:', error);
+    return NextResponse.json({ success: false, error: error?.message || 'Unknown error' }, { status: 500 });
   }
 }
