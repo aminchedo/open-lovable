@@ -31,18 +31,19 @@ export async function GET(request: NextRequest) {
     const Sandbox = e2bModule.Sandbox;
     
     // Try to create a sandbox to test the API key
-    const sandbox = await Sandbox.create({
-      template: 'nodejs',
+    const sandbox = await Sandbox.create('nodejs', {
       apiKey: e2bApiKey,
     });
     
-    // If successful, immediately close the sandbox
-    await sandbox.close();
+    const info = await sandbox.getInfo();
+
+    // If successful, immediately kill the sandbox
+    await sandbox.kill();
     
     return NextResponse.json({
       success: true,
       message: 'E2B API key is valid and working',
-      sandboxId: sandbox.id,
+      sandboxId: info.sandboxId,
       timestamp: new Date().toISOString()
     });
     
