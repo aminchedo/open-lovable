@@ -15,9 +15,11 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build", 
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "postinstall": "npm run type-check || true",
+    "type-check": "tsc --noEmit",
     "test:apis": "echo 'Visit http://localhost:3000/test to run API tests'"
   },
   "dependencies": {

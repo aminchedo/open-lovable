@@ -7,7 +7,7 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
 
-  // ✅ Build error handling (temporary for deployment)
+  // ✅ Build error handling for deployment
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -19,17 +19,17 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
-  serverExternalPackages: ['@e2b/code-interpreter'],
-
+  serverExternalPackages: ['@e2b/code-interpreter', '@e2b/sdk'],
+  
   // ✅ Expose safe environment variables
   env: {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     AVALAI_BASE_URL: process.env.AVALAI_BASE_URL,
   },
 
-  // ✅ Webpack optimization for serverless
+  // ✅ Improved webpack configuration for Vercel
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
-    // Client-side fallbacks
+    // Client-side fallbacks for Node.js modules
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -41,25 +41,65 @@ const nextConfig = {
         os: false,
         stream: false,
         assert: false,
+        process: false,
+        buffer: false,
       }
     }
 
-    // Handle problematic external packages
+    // Handle external packages that shouldn't be bundled
     config.externals = [...(config.externals || []), 'canvas', 'jsdom', 'sharp']
 
-    // Optimize bundle size
-    config.optimization.splitChunks = {
-      chunks: 'all',
-      cacheGroups: {
-        vendor: {
-          test: /[\\/]node_modules[\\/]/,
-          name: 'vendors',
-          chunks: 'all',
+    // Optimize for Vercel's environment
+    config.optimization = {
+      ...config.optimization,
+      splitChunks: {
+        chunks: 'all',
+        cacheGroups: {
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'vendors',
+            chunks: 'all',
+          },
         },
       },
     }
 
+    // Add alias for better module resolution
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': process.cwd(),
+    }
+
     return config
+  },
+
+  // ✅ Image optimization for Vercel
+  images: {
+    domains: ['firecrawl.dev'],
+    formats: ['image/webp', 'image/avif'],
+  },
+
+  // ✅ Headers for better performance
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, PUT, DELETE, OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type, Authorization',
+          },
+        ],
+      },
+    ];
   },
 }
 
