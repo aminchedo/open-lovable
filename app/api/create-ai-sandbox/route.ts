@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const template = body.template || 'nodejs';
     
-    const { createSandbox } = await import('@e2b/sdk');
+    const { Sandbox } = await import('@e2b/sdk');
     
     // Explicit API key configuration
-    const sandbox = await createSandbox({
+    const sandbox = await Sandbox.create({
       template,
       apiKey: e2bApiKey,
       timeout: 30000,

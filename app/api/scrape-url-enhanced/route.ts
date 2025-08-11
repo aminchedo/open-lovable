@@ -34,10 +34,11 @@ export async function POST(request: NextRequest) {
 
     console.log('[scrape-url-enhanced] Processing URL:', url);
 
-    const { FirecrawlApp } = await import('@mendable/firecrawl-js');
+    const firecrawlModule = await import('@mendable/firecrawl-js');
+    const Firecrawl = firecrawlModule.default;
     
     // Explicit API key configuration
-    const app = new FirecrawlApp({ 
+    const app = new Firecrawl({ 
       apiKey: firecrawlApiKey 
     });
     
