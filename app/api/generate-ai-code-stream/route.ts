@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createGroq } from '@ai-sdk/groq';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText } from 'ai';
 import type { SandboxState } from '@/types/sandbox';
 import { selectFilesForEdit, getFileContents, formatFilesForAI } from '@/lib/context-selector';
@@ -21,6 +22,10 @@ const anthropic = createAnthropic({
 
 const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+});
+
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 });
 
 // Helper function to analyze user preferences from conversation history
@@ -1154,12 +1159,14 @@ CRITICAL: When files are provided in the context:
         // Track packages that need to be installed
         const packagesToInstall: string[] = [];
         
-        // Determine which provider to use based on model
+                // Determine which provider to use based on model
         const isAnthropic = model.startsWith('anthropic/');
-        const isOpenAI = model.startsWith('openai/gpt-5');
-        const modelProvider = isAnthropic ? anthropic : (isOpenAI ? openai : groq);
+        const isOpenAI = model.startsWith('openai/');
+        const isGoogle = model.startsWith('google/');
+        const modelProvider = isAnthropic ? anthropic : (isOpenAI ? openai : (isGoogle ? google : groq));
         const actualModel = isAnthropic ? model.replace('anthropic/', '') : 
-                           (model === 'openai/gpt-5') ? 'gpt-5' : model;
+                          isOpenAI ? model.replace('openai/', '') :
+                          isGoogle ? model.replace('google/', '') : model;
         
         // Make streaming API call with appropriate provider
         const streamOptions: any = {
@@ -1587,10 +1594,12 @@ Provide the complete file content without any truncation. Include all necessary 
                 // Make a focused API call to complete this specific file
                 // Create a new client for the completion based on the provider
                 let completionClient;
-                if (model.includes('gpt') || model.includes('openai')) {
+                if (model.includes('openai') || model.includes('gpt')) {
                   completionClient = openai;
-                } else if (model.includes('claude')) {
+                } else if (model.includes('claude') || model.includes('anthropic')) {
                   completionClient = anthropic;
+                } else if (model.includes('google') || model.includes('gemini')) {
+                  completionClient = google;
                 } else {
                   completionClient = groq;
                 }
