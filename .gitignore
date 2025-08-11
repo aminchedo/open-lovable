@@ -29,7 +29,9 @@ pnpm-lock.yaml
 /build
 
 # Environment
-.env.local
+# WARNING: For this project we commit .env.local to simplify setup.
+# Remove this if you do not want to commit env files.
+# .env.local
 .env.development.local
 .env.test.local
 .env.production.local
