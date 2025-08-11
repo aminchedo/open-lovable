@@ -25,35 +25,44 @@ export const appConfig = {
     defaultTemplate: undefined, // or specify a template ID
   },
   
-  // AI Model Configuration
+  // AI Model Configuration - Smart Fallback System
   ai: {
-    // Default AI model
-    defaultModel: 'google/gemini-1.5-flash',
+    // Default AI model (Free first)
+    defaultModel: 'gemini-pro',
     
-    // Available models
+    // Smart fallback configuration
+    smartFallback: {
+      enabled: true,
+      freeFirst: true,
+      maxRetries: 3,
+      retryDelay: 1000, // milliseconds
+    },
+    
+    // Available models with priority order
     availableModels: [
-      'google/gemini-pro',
-      'google/gemini-1.5-flash',
+      // Priority 1: Free Models (Try These First)
+      'gemini-pro',
+      'gemini-1.5-flash',
+      'avalai/gpt-4o-mini',
+      'avalai/deepseek-coder',
+      
+      // Priority 2: Premium Models (Fallback)
       'avalai/gpt-5-mini',
       'avalai/claude-4-opus',
       'avalai/o3-pro',
-      'avalai/deepseek-coder',
-      'openai/gpt-5',
-      'moonshotai/kimi-k2-instruct',
-      'anthropic/claude-sonnet-4-20250514'
+      'avalai/gpt-5',
     ],
     
-    // Model display names
+    // Model display names with tier indicators
     modelDisplayNames: {
-      'google/gemini-pro': 'Gemini Pro (free)',
-      'google/gemini-1.5-flash': 'Gemini 1.5 Flash (free)',
-      'avalai/gpt-5-mini': 'AvalAI GPT-5 Mini',
-      'avalai/claude-4-opus': 'AvalAI Claude 4 Opus',
-      'avalai/o3-pro': 'AvalAI O3 Pro',
-      'avalai/deepseek-coder': 'AvalAI DeepSeek Coder',
-      'openai/gpt-5': 'GPT-5',
-      'moonshotai/kimi-k2-instruct': 'Kimi K2 Instruct',
-      'anthropic/claude-sonnet-4-20250514': 'Sonnet 4'
+      'gemini-pro': '🆓 Gemini Pro (Free)',
+      'gemini-1.5-flash': '🆓 Gemini 1.5 Flash (Free)',
+      'avalai/gpt-4o-mini': '🆓 GPT-4o Mini (Free)',
+      'avalai/deepseek-coder': '🆓 DeepSeek Coder (Free)',
+      'avalai/gpt-5-mini': '💎 GPT-5 Mini (Premium)',
+      'avalai/claude-4-opus': '💎 Claude 4.1 Opus (Premium)',
+      'avalai/o3-pro': '💎 O3 Pro (Premium)',
+      'avalai/gpt-5': '💎 GPT-5 (Premium)',
     },
     
     // Temperature settings for non-reasoning models

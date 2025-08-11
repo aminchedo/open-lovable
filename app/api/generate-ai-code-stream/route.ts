@@ -1,8 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createGroq } from '@ai-sdk/groq';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText } from 'ai';
 import type { SandboxState } from '@/types/sandbox';
 import { selectFilesForEdit, getFileContents, formatFilesForAI } from '@/lib/context-selector';
@@ -10,29 +6,9 @@ import { executeSearchPlan, formatSearchResultsForAI, selectTargetFile } from '@
 import { FileManifest } from '@/types/file-manifest';
 import type { ConversationState, ConversationMessage, ConversationEdit } from '@/types/conversation';
 import { appConfig } from '@/config/app.config';
+import { smartAIClient, getModelDisplayName, isFreeModel } from '@/lib/smart-ai-client';
 
-const groq = createGroq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
-const anthropic = createAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  baseURL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
-});
-
-const openai = createOpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-});
-
-// Add AvalAI (OpenAI-compatible) provider
-const avalai = createOpenAI({
-  apiKey: process.env.AVALAI_API_KEY,
-  baseURL: process.env.AVALAI_BASE_URL || 'https://api.avalai.ir/v1',
-});
+// Smart AI client handles all providers with automatic fallback
 
 // Helper function to analyze user preferences from conversation history
 function analyzeUserPreferences(messages: ConversationMessage[]): {
@@ -80,7 +56,7 @@ declare global {
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, model = 'openai/gpt-oss-20b', context, isEdit = false } = await request.json();
+    const { prompt, model = 'gemini-pro', context, isEdit = false } = await request.json();
     
     console.log('[generate-ai-code-stream] Received request:');
     console.log('[generate-ai-code-stream] - prompt:', prompt);
@@ -1165,24 +1141,18 @@ CRITICAL: When files are provided in the context:
         // Track packages that need to be installed
         const packagesToInstall: string[] = [];
         
-                // Determine which provider to use based on model
-        const isAnthropic = model.startsWith('anthropic/');
-        const isOpenAI = model.startsWith('openai/');
-        const isGoogle = model.startsWith('google/');
-        const isAvalAI = model.startsWith('avalai/');
-        const modelProvider = isAnthropic ? anthropic : (isOpenAI ? openai : (isGoogle ? google : (isAvalAI ? avalai : groq)));
-        const actualModel = isAnthropic ? model.replace('anthropic/', '') : 
-                         isOpenAI ? model.replace('openai/', '') :
-                         isGoogle ? model.replace('google/', '') :
-                         isAvalAI ? model.replace('avalai/', '') : model;
+                // Use Smart AI Client with automatic fallback
+        console.log(`[SmartAI] Starting code generation with model: ${model}`);
         
-        // Make streaming API call with appropriate provider
-        const streamOptions: any = {
-          model: modelProvider(actualModel),
-          messages: [
-            { 
-              role: 'system', 
-              content: systemPrompt + `
+        // Determine task type for smart model selection
+        const taskType = isEdit ? 'code-generation' : 'website-cloning';
+        
+        let aiResponse;
+        let result;
+        try {
+          console.log('[DEBUG] About to call smartAIClient.getAIResponse');
+          aiResponse = await smartAIClient.getAIResponse(
+            fullPrompt + `
 
 🚨 CRITICAL CODE GENERATION RULES - VIOLATION = FAILURE 🚨:
 1. NEVER truncate ANY code - ALWAYS write COMPLETE files
@@ -1216,11 +1186,7 @@ Examples of CORRECT CODE (ALWAYS DO THIS):
 ✅ const title = "Welcome to our application"
 ✅ import { useState, useEffect, useCallback } from 'react'
 
-REMEMBER: It's better to generate fewer COMPLETE files than many INCOMPLETE files.`
-            },
-            { 
-              role: 'user', 
-              content: fullPrompt + `
+REMEMBER: It's better to generate fewer COMPLETE files than many INCOMPLETE files.
 
 CRITICAL: You MUST complete EVERY file you start. If you write:
 <file path="src/components/Hero.jsx">
@@ -1236,30 +1202,55 @@ ALWAYS write complete code:
 <p>Some text here with full content</p>  ✅ CORRECT
 
 If you're running out of space, generate FEWER files but make them COMPLETE.
-It's better to have 3 complete files than 10 incomplete files.`
+It's better to have 3 complete files than 10 incomplete files.`,
+            model,
+            taskType,
+            {
+              maxTokens: 8192,
+              temperature: 0.7,
+              stream: true
             }
-          ],
-          maxTokens: 8192, // Reduce to ensure completion
-          stopSequences: [] // Don't stop early
-          // Note: Neither Groq nor Anthropic models support tool/function calling in this context
-          // We use XML tags for package detection instead
-        };
-        
-        // Add temperature for non-reasoning models
-        if (!model.startsWith('openai/gpt-5')) {
-          streamOptions.temperature = 0.7;
+          );
+          
+          console.log('[DEBUG] aiResponse received:', {
+            hasAiResponse: !!aiResponse,
+            aiResponseKeys: aiResponse ? Object.keys(aiResponse) : 'no aiResponse',
+            hasResponse: aiResponse ? !!aiResponse.response : false,
+            responseKeys: aiResponse && aiResponse.response ? Object.keys(aiResponse.response) : 'no response'
+          });
+          
+          console.log(`[SmartAI] Success with model: ${aiResponse.model} (${aiResponse.tier})`);
+          
+          // Send model info to client
+          await sendProgress({ 
+            type: 'model-info', 
+            model: aiResponse.model,
+            tier: aiResponse.tier,
+            provider: aiResponse.provider,
+            displayName: getModelDisplayName(aiResponse.model)
+          });
+          
+          const result = aiResponse.response;
+          
+          console.log('[DEBUG] aiResponse structure:', {
+            hasResponse: !!aiResponse.response,
+            responseKeys: aiResponse.response ? Object.keys(aiResponse.response) : 'no response',
+            hasTextStream: aiResponse.response ? 'textStream' in aiResponse.response : false
+          });
+          
+          // Ensure result has the expected structure
+          if (!result || !result.textStream) {
+            throw new Error('AI response does not have expected streaming structure');
+          }
+        } catch (aiError) {
+          console.error('[SmartAI] All AI models failed:', aiError);
+          await sendProgress({ 
+            type: 'error', 
+            error: 'All AI models are currently unavailable. Please try again later.',
+            details: (aiError as Error).message
+          });
+          return new NextResponse('AI service unavailable', { status: 503 });
         }
-        
-        // Add reasoning effort for GPT-5 models
-        if (isOpenAI) {
-          streamOptions.experimental_providerMetadata = {
-            openai: {
-              reasoningEffort: 'high'
-            }
-          };
-        }
-        
-        const result = await streamText(streamOptions);
         
         // Stream the response and parse in real-time
         let generatedCode = '';

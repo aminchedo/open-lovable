@@ -1,35 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createGroq } from '@ai-sdk/groq';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { FileManifest } from '@/types/file-manifest';
+import { smartAIClient, getModelDisplayName } from '@/lib/smart-ai-client';
 
-const groq = createGroq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
-const anthropic = createAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  baseURL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
-});
-
-const openai = createOpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: process.env.OPENAI_BASE_URL,
-});
-
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-});
-
-// Add AvalAI (OpenAI-compatible) provider
-const avalai = createOpenAI({
-  apiKey: process.env.AVALAI_API_KEY,
-  baseURL: process.env.AVALAI_BASE_URL || 'https://api.avalai.ir/v1',
-});
+// Smart AI client handles all providers with automatic fallback
 
 // Schema for the AI's search plan - not file selection!
 const searchPlanSchema = z.object({
@@ -61,7 +36,7 @@ const searchPlanSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, manifest, model = 'openai/gpt-oss-20b' } = await request.json();
+    const { prompt, manifest, model = 'gemini-pro' } = await request.json();
     
     console.log('[analyze-edit-intent] Request received');
     console.log('[analyze-edit-intent] Prompt:', prompt);
@@ -103,35 +78,13 @@ export async function POST(request: NextRequest) {
     console.log('[analyze-edit-intent] Analyzing prompt:', prompt);
     console.log('[analyze-edit-intent] File summary preview:', fileSummary.split('\n').slice(0, 5).join('\n'));
     
-    // Select the appropriate AI model based on the request
-    let aiModel;
-    if (model.startsWith('anthropic/')) {
-      aiModel = anthropic(model.replace('anthropic/', ''));
-    } else if (model.startsWith('openai/')) {
-      if (model.includes('gpt-oss')) {
-        aiModel = groq(model);
-      } else {
-        aiModel = openai(model.replace('openai/', ''));
-      }
-    } else if (model.startsWith('google/')) {
-      aiModel = google(model.replace('google/', ''));
-    } else if (model.startsWith('avalai/')) {
-      aiModel = avalai(model.replace('avalai/', ''));
-    } else {
-      // Default to groq if model format is unclear
-      aiModel = groq(model);
-    }
+    // Use Smart AI Client with automatic fallback
+    console.log('[analyze-edit-intent] Using Smart AI Client with model:', model);
     
-    console.log('[analyze-edit-intent] Using AI model:', model);
-    
-    // Use AI to create a search plan
-    const result = await generateObject({
-      model: aiModel,
-      schema: searchPlanSchema,
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert at planning code searches. Your job is to create a search strategy to find the exact code that needs to be edited.
+    try {
+      // Use AI to create a search plan with smart fallback
+      const aiResponse = await smartAIClient.getAIResponse(
+        `You are an expert at planning code searches. Your job is to create a search strategy to find the exact code that needs to be edited.
 
 DO NOT GUESS which files to edit. Instead, provide specific search terms that will locate the code.
 
@@ -158,29 +111,75 @@ SEARCH STRATEGY RULES:
    - Add regex patterns for structural searches
 
 Current project structure for context:
-${fileSummary}`
-        },
-        {
-          role: 'user',
-          content: `User request: "${prompt}"
+${fileSummary}
 
-Create a search plan to find the exact code that needs to be modified. Include specific search terms and patterns.`
+User request: "${prompt}"
+
+Create a search plan to find the exact code that needs to be modified. Include specific search terms and patterns.
+
+Please respond with a JSON object that matches this schema:
+{
+  "editType": "UPDATE_COMPONENT|ADD_FEATURE|FIX_ISSUE|UPDATE_STYLE|REFACTOR|ADD_DEPENDENCY|REMOVE_ELEMENT",
+  "reasoning": "explanation of the search strategy",
+  "searchTerms": ["specific", "search", "terms"],
+  "regexPatterns": ["optional", "regex", "patterns"],
+  "fileTypesToSearch": [".jsx", ".tsx", ".js", ".ts"],
+  "expectedMatches": 1,
+  "fallbackSearch": {
+    "terms": ["backup", "search", "terms"],
+    "patterns": ["backup", "patterns"]
+  }
+}`,
+        model,
+        'code-generation',
+        {
+          maxTokens: 2000,
+          temperature: 0.3
         }
-      ]
-    });
-    
-    console.log('[analyze-edit-intent] Search plan created:', {
-      editType: result.object.editType,
-      searchTerms: result.object.searchTerms,
-      patterns: result.object.regexPatterns?.length || 0,
-      reasoning: result.object.reasoning
-    });
-    
-    // Return the search plan, not file matches
-    return NextResponse.json({
-      success: true,
-      searchPlan: result.object
-    });
+      );
+      
+      console.log('[analyze-edit-intent] AI response received from model:', aiResponse.model);
+      
+      // Parse the AI response as JSON
+      let searchPlan;
+      try {
+        const responseText = await aiResponse.response.text;
+        searchPlan = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('[analyze-edit-intent] Failed to parse AI response as JSON:', parseError);
+        throw new Error('AI response could not be parsed as valid JSON');
+      }
+      
+      // Validate the search plan against the schema
+      const validatedPlan = searchPlanSchema.parse(searchPlan);
+      
+      console.log('[analyze-edit-intent] Search plan created:', {
+        editType: validatedPlan.editType,
+        searchTerms: validatedPlan.searchTerms,
+        patterns: validatedPlan.regexPatterns?.length || 0,
+        reasoning: validatedPlan.reasoning,
+        model: aiResponse.model,
+        tier: aiResponse.tier
+      });
+      
+      // Return the search plan, not file matches
+      return NextResponse.json({
+        success: true,
+        searchPlan: validatedPlan,
+        model: aiResponse.model,
+        tier: aiResponse.tier,
+        provider: aiResponse.provider
+      });
+      
+    } catch (aiError) {
+      console.error('[analyze-edit-intent] AI error:', aiError);
+      return NextResponse.json({
+        success: false,
+        error: 'AI service unavailable. Please try again later.',
+        details: (aiError as Error).message
+      }, { status: 503 });
+    }
+      
     
   } catch (error) {
     console.error('[analyze-edit-intent] Error:', error);
