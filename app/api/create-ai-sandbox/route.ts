@@ -37,8 +37,19 @@ export async function POST() {
 
     // Create base sandbox - we'll set up Vite ourselves for full control
     console.log(`[create-ai-sandbox] Creating base E2B sandbox with ${appConfig.e2b.timeoutMinutes} minute timeout...`);
+
+    const E2B_API_KEY = process.env.E2B_API_KEY;
+    if (!E2B_API_KEY) {
+      console.error('E2B_API_KEY not found in environment variables');
+      return NextResponse.json({
+        success: false,
+        error: 'E2B API key not configured',
+        code: 'MISSING_E2B_KEY'
+      }, { status: 500 });
+    }
+
     sandbox = await Sandbox.create({ 
-      apiKey: process.env.E2B_API_KEY,
+      apiKey: E2B_API_KEY,
       timeoutMs: appConfig.e2b.timeoutMs
     });
     

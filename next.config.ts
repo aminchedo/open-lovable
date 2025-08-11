@@ -21,6 +21,12 @@ const nextConfig = {
   },
   serverExternalPackages: ['@e2b/code-interpreter'],
 
+  // ✅ Expose safe environment variables
+  env: {
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    AVALAI_BASE_URL: process.env.AVALAI_BASE_URL,
+  },
+
   // ✅ Webpack optimization for serverless
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
     // Client-side fallbacks

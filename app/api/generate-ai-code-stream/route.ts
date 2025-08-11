@@ -78,6 +78,30 @@ declare global {
   var conversationState: ConversationState | null;
 }
 
+function validateProviderEnvOrThrow(model: string) {
+  if (model.startsWith('avalai/')) {
+    if (!process.env.AVALAI_API_KEY) {
+      throw new Error('AVALAI_API_KEY is not configured');
+    }
+  } else if (model.startsWith('google/')) {
+    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+      throw new Error('GOOGLE_GENERATIVE_AI_API_KEY is not configured');
+    }
+  } else if (model.startsWith('openai/')) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY is not configured');
+    }
+  } else if (model.startsWith('anthropic/')) {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error('ANTHROPIC_API_KEY is not configured');
+    }
+  } else if (model.startsWith('groq/')) {
+    if (!process.env.GROQ_API_KEY) {
+      throw new Error('GROQ_API_KEY is not configured');
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { prompt, model: requestedModel, context, isEdit = false } = await request.json();
@@ -85,8 +109,13 @@ export async function POST(request: NextRequest) {
     console.log('[generate-ai-code-stream] Received request:');
     console.log('[generate-ai-code-stream] - prompt:', prompt);
     console.log('[generate-ai-code-stream] - isEdit:', isEdit);
-    const modelFromConfig = (appConfig as any).ai?.defaultModel || 'google/gemini-pro';
+    const modelFromConfig = (process.env.DEFAULT_MODEL as string) || 'google/gemini-pro';
     const model = requestedModel || modelFromConfig;
+    console.log('[generate-ai-code-stream] - model:', model);
+
+    // Validate provider env ahead of time
+    validateProviderEnvOrThrow(model);
+    
     const fallbackOrder = ((appConfig as any).ai?.fallbackOrder as string[]) || [
       'google/gemini-pro',
       'google/gemini-1.5-flash',

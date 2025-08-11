@@ -302,9 +302,18 @@ export async function POST(request: NextRequest) {
     if (!sandbox && sandboxId) {
       console.log(`[apply-ai-code-stream] Sandbox ${sandboxId} not in this instance, attempting reconnect...`);
       
+      const E2B_API_KEY = process.env.E2B_API_KEY;
+      if (!E2B_API_KEY) {
+        console.error('E2B_API_KEY not found in environment variables');
+        return NextResponse.json({
+          success: false,
+          error: 'E2B API key not configured',
+          code: 'MISSING_E2B_KEY'
+        }, { status: 500 });
+      }
       try {
         // Reconnect to the existing sandbox using E2B's connect method
-        sandbox = await Sandbox.connect(sandboxId, { apiKey: process.env.E2B_API_KEY });
+        sandbox = await Sandbox.connect(sandboxId, { apiKey: E2B_API_KEY });
         console.log(`[apply-ai-code-stream] Successfully reconnected to sandbox ${sandboxId}`);
         
         // Store the reconnected sandbox globally for this instance
