@@ -1,34 +1,60 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // ✅ Essential for Vercel deployment
+  output: 'standalone',
+
+  // ✅ Production optimizations
+  compress: true,
+  poweredByHeader: false,
+
+  // ✅ Build error handling (temporary for deployment)
   eslint: {
-    ignoreDuringBuilds: true, // Skip ESLint errors during build
+    ignoreDuringBuilds: true,
   },
   typescript: {
-    ignoreBuildErrors: true, // Skip TypeScript errors during build
+    ignoreBuildErrors: true,
+  },
+
+  // ✅ Advanced configurations
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
   serverExternalPackages: ['@e2b/code-interpreter'],
-  webpack: (config, { isServer }) => {
+
+  // ✅ Webpack optimization for serverless
+  webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+    // Client-side fallbacks
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
         net: false,
         tls: false,
+        crypto: false,
+        path: false,
+        os: false,
+        stream: false,
+        assert: false,
       }
     }
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'sharp$': false,
-      'onnxruntime-node$': false,
+
+    // Handle problematic external packages
+    config.externals = [...(config.externals || []), 'canvas', 'jsdom', 'sharp']
+
+    // Optimize bundle size
+    config.optimization.splitChunks = {
+      chunks: 'all',
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendors',
+          chunks: 'all',
+        },
+      },
     }
+
     return config
   },
-  env: {
-    E2B_API_KEY: process.env.E2B_API_KEY,
-    FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
-    AVALAI_API_KEY: process.env.AVALAI_API_KEY,
-    GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-  }
 }
 
 module.exports = nextConfig

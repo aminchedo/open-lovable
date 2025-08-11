@@ -1,14 +1,20 @@
 {
   "name": "open-lovable",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "description": "AI-powered website cloning tool with 40+ premium models",
+  "keywords": ["ai", "website-cloning", "react", "nextjs", "vercel"],
+  "author": "Open-Lovable Team",
+  "license": "MIT",
   "type": "module",
+  
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "clean": "rm -rf .next node_modules package-lock.json",
     "test:integration": "node tests/e2b-integration.test.js",
     "test:api": "node tests/api-endpoints.test.js",
     "test:code": "node tests/code-execution.test.js",
@@ -59,6 +65,7 @@
     "typescript": "^5"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.17.0",
+    "npm": ">=9.0.0"
   }
 }
