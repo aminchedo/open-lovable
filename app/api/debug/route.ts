@@ -32,8 +32,9 @@ export async function GET() {
     timestamp: new Date().toISOString(),
   };
 
+ 
   const issues = [];
-  if (!envCheck.E2B_API_KEY.exists) issues.push('E2B_API_KEY missing');
+   if (!envCheck.E2B_API_KEY.exists) issues.push('E2B_API_KEY missing');
   if (!envCheck.FIRECRAWL_API_KEY.exists) issues.push('FIRECRAWL_API_KEY missing');
   if (!envCheck.AVALAI_API_KEY.exists) issues.push('AVALAI_API_KEY missing');
 
