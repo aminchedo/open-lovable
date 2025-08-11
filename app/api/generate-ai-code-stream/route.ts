@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { streamText } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
 import type { SandboxState } from '@/types/sandbox';
 import { selectFilesForEdit, getFileContents, formatFilesForAI } from '@/lib/context-selector';
 import { executeSearchPlan, formatSearchResultsForAI, selectTargetFile } from '@/lib/file-search-executor';
@@ -1151,8 +1152,18 @@ CRITICAL: When files are provided in the context:
         let result;
         try {
           console.log('[DEBUG] About to call smartAIClient.getAIResponse');
-          aiResponse = await smartAIClient.getAIResponse(
-            fullPrompt + `
+          
+                    // For now, let's use Google AI (free) to test
+          const { GoogleGenerativeAI } = await import('@google/generative-ai');
+          const googleAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!);
+          const model = googleAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+          
+          console.log('[DEBUG] About to call Google AI directly');
+          
+          let streamResult;
+          console.log('[DEBUG] Before Google AI call');
+          try {
+            const result = await model.generateContentStream(fullPrompt + `
 
 🚨 CRITICAL CODE GENERATION RULES - VIOLATION = FAILURE 🚨:
 1. NEVER truncate ANY code - ALWAYS write COMPLETE files
@@ -1202,15 +1213,54 @@ ALWAYS write complete code:
 <p>Some text here with full content</p>  ✅ CORRECT
 
 If you're running out of space, generate FEWER files but make them COMPLETE.
-It's better to have 3 complete files than 10 incomplete files.`,
-            model,
-            taskType,
-            {
-              maxTokens: 8192,
-              temperature: 0.7,
-              stream: true
-            }
-          );
+It's better to have 3 complete files than 10 incomplete files.`);
+
+            console.log('[DEBUG] Google AI call completed, result:', {
+              hasResult: !!result,
+              resultType: typeof result,
+              resultKeys: result ? Object.keys(result) : 'no result'
+            });
+
+            console.log('[DEBUG] Google AI result:', {
+              hasResult: !!result,
+              hasStream: !!result.stream,
+              resultType: typeof result
+            });
+            
+            // Convert Google AI stream to AI SDK format
+            streamResult = {
+              textStream: (async function* () {
+                console.log('[DEBUG] Starting async generator');
+                for await (const chunk of result.stream) {
+                  const text = chunk.text();
+                  console.log('[DEBUG] Chunk text:', text);
+                  if (text) yield text;
+                }
+                console.log('[DEBUG] Async generator finished');
+              })()
+            };
+            
+                          console.log('[DEBUG] streamResult structure:', {
+                hasStreamResult: !!streamResult,
+                streamResultType: typeof streamResult,
+                streamResultKeys: streamResult ? Object.keys(streamResult) : 'no streamResult',
+                hasTextStream: streamResult ? 'textStream' in streamResult : false,
+                hasText: streamResult ? 'text' in streamResult : false
+              });
+              
+              console.log('[DEBUG] streamResult assigned successfully');
+            
+          } catch (streamError) {
+            console.error('[DEBUG] Google AI failed:', streamError);
+            throw new Error(`Google AI API call failed: ${streamError.message}`);
+          }
+          
+                    aiResponse = {
+            response: streamResult,
+            model: 'gemini-pro',
+            tier: 'free',
+            provider: 'google'
+          };
           
           console.log('[DEBUG] aiResponse received:', {
             hasAiResponse: !!aiResponse,
