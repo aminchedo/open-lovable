@@ -28,6 +28,12 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 });
 
+// Add AvalAI (OpenAI-compatible) provider
+const avalai = createOpenAI({
+  apiKey: process.env.AVALAI_API_KEY,
+  baseURL: process.env.AVALAI_BASE_URL || 'https://api.avalai.ir/v1',
+});
+
 // Helper function to analyze user preferences from conversation history
 function analyzeUserPreferences(messages: ConversationMessage[]): {
   commonPatterns: string[];
@@ -1163,10 +1169,12 @@ CRITICAL: When files are provided in the context:
         const isAnthropic = model.startsWith('anthropic/');
         const isOpenAI = model.startsWith('openai/');
         const isGoogle = model.startsWith('google/');
-        const modelProvider = isAnthropic ? anthropic : (isOpenAI ? openai : (isGoogle ? google : groq));
+        const isAvalAI = model.startsWith('avalai/');
+        const modelProvider = isAnthropic ? anthropic : (isOpenAI ? openai : (isGoogle ? google : (isAvalAI ? avalai : groq)));
         const actualModel = isAnthropic ? model.replace('anthropic/', '') : 
-                          isOpenAI ? model.replace('openai/', '') :
-                          isGoogle ? model.replace('google/', '') : model;
+                         isOpenAI ? model.replace('openai/', '') :
+                         isGoogle ? model.replace('google/', '') :
+                         isAvalAI ? model.replace('avalai/', '') : model;
         
         // Make streaming API call with appropriate provider
         const streamOptions: any = {
@@ -1600,6 +1608,8 @@ Provide the complete file content without any truncation. Include all necessary 
                   completionClient = anthropic;
                 } else if (model.includes('google') || model.includes('gemini')) {
                   completionClient = google;
+                } else if (model.includes('avalai')) {
+                  completionClient = avalai;
                 } else {
                   completionClient = groq;
                 }

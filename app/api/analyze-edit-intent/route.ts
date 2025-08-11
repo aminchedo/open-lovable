@@ -25,6 +25,12 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 });
 
+// Add AvalAI (OpenAI-compatible) provider
+const avalai = createOpenAI({
+  apiKey: process.env.AVALAI_API_KEY,
+  baseURL: process.env.AVALAI_BASE_URL || 'https://api.avalai.ir/v1',
+});
+
 // Schema for the AI's search plan - not file selection!
 const searchPlanSchema = z.object({
   editType: z.enum([
@@ -109,6 +115,8 @@ export async function POST(request: NextRequest) {
       }
     } else if (model.startsWith('google/')) {
       aiModel = google(model.replace('google/', ''));
+    } else if (model.startsWith('avalai/')) {
+      aiModel = avalai(model.replace('avalai/', ''));
     } else {
       // Default to groq if model format is unclear
       aiModel = groq(model);

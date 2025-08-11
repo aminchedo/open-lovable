@@ -32,7 +32,12 @@ export const appConfig = {
     
     // Available models
     availableModels: [
+      'google/gemini-pro',
       'google/gemini-1.5-flash',
+      'avalai/gpt-5-mini',
+      'avalai/claude-4-opus',
+      'avalai/o3-pro',
+      'avalai/deepseek-coder',
       'openai/gpt-5',
       'moonshotai/kimi-k2-instruct',
       'anthropic/claude-sonnet-4-20250514'
@@ -40,7 +45,12 @@ export const appConfig = {
     
     // Model display names
     modelDisplayNames: {
+      'google/gemini-pro': 'Gemini Pro (free)',
       'google/gemini-1.5-flash': 'Gemini 1.5 Flash (free)',
+      'avalai/gpt-5-mini': 'AvalAI GPT-5 Mini',
+      'avalai/claude-4-opus': 'AvalAI Claude 4 Opus',
+      'avalai/o3-pro': 'AvalAI O3 Pro',
+      'avalai/deepseek-coder': 'AvalAI DeepSeek Coder',
       'openai/gpt-5': 'GPT-5',
       'moonshotai/kimi-k2-instruct': 'Kimi K2 Instruct',
       'anthropic/claude-sonnet-4-20250514': 'Sonnet 4'
