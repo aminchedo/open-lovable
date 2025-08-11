@@ -156,13 +156,13 @@ function extractRoutes(files: Record<string, FileInfo>): RouteInfo[] {
       // Extract route definitions (simplified)
       const routeMatches = fileInfo.content.matchAll(/path=["']([^"']+)["'].*(?:element|component)={([^}]+)}/g);
       
-      for (const match of routeMatches) {
+      Array.from(routeMatches).forEach(match => {
         const [, routePath, componentRef] = match;
         routes.push({
           path: routePath,
           component: path,
         });
-      }
+      });
     }
     
     // Check for Next.js style pages

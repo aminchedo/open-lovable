@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
-  console.log('[create-ai-sandbox] Request received');
+  console.log('[create-ai-sandbox] Starting request');
   
   try {
-    // Environment validation
     const e2bApiKey = process.env.E2B_API_KEY;
     
     if (!e2bApiKey) {
@@ -19,22 +18,8 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Validate API key format
-    if (!e2bApiKey.startsWith('E2b_') && !e2bApiKey.startsWith('e2b_')) {
-      console.error('[create-ai-sandbox] Invalid API key format');
-      return NextResponse.json(
-        { 
-          success: false,
-          error: 'Invalid E2B API key format',
-          code: 'INVALID_API_KEY_FORMAT'
-        },
-        { status: 401 }
-      );
-    }
-    
     console.log(`[create-ai-sandbox] API key validated (length: ${e2bApiKey.length})`);
     
-    // Parse request body
     let body;
     try {
       body = await request.json();
@@ -52,21 +37,40 @@ export async function POST(request: NextRequest) {
     const { template = 'nodejs' } = body;
     console.log(`[create-ai-sandbox] Creating sandbox with template: ${template}`);
     
-    // Import and create sandbox
-    const { Sandbox } = await import('@e2b/sdk');
+    // Import E2B SDK with proper error handling
+    let Sandbox;
+    try {
+      const e2bModule = await import('e2b');
+      Sandbox = e2bModule.Sandbox;
+    } catch (importError) {
+      console.error('[create-ai-sandbox] Failed to import E2B SDK:', importError);
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'E2B SDK import failed',
+          code: 'SDK_IMPORT_ERROR'
+        },
+        { status: 500 }
+      );
+    }
     
-    const sandbox = await Sandbox.create({
-      template,
-      apiKey: e2bApiKey,
-      timeout: 30000,
-    });
+    // Create sandbox with timeout
+    const sandbox = await Promise.race([
+      Sandbox.create({
+        template,
+        apiKey: e2bApiKey,
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Sandbox creation timeout')), 30000)
+      )
+    ]);
     
     console.log(`[create-ai-sandbox] Sandbox created successfully: ${sandbox.id}`);
     
     return NextResponse.json({
       success: true,
       sandboxId: sandbox.id,
-      url: sandbox.url,
+      url: sandbox.url || `https://sandbox.e2b.dev/${sandbox.id}`,
       template: template,
       timestamp: new Date().toISOString()
     });
@@ -74,11 +78,10 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('[create-ai-sandbox] Error details:', {
       message: error.message,
-      stack: error.stack,
-      name: error.name
+      name: error.name,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
     
-    // Handle specific E2B errors
     if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
       return NextResponse.json(
         { 
@@ -101,7 +104,6 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Generic error response
     return NextResponse.json(
       { 
         success: false,

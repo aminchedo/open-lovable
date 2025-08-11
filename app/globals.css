@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @keyframes slide {
   0% { transform: translate(0, 0); }
@@ -113,8 +115,8 @@
   }
 }
 
-/* Theme configuration for Tailwind CSS v4 */
-@theme {
+/* Custom CSS variables for theming */
+:root {
   --color-background: hsl(0 0% 100%);
   --color-foreground: hsl(240 10% 3.9%);
   --color-card: hsl(0 0% 100%);
@@ -163,11 +165,11 @@
 
 @layer base {
   * {
-    border-color: theme('colors.border');
+    border-color: hsl(var(--color-border));
   }
   body {
-    background-color: theme('colors.background');
-    color: theme('colors.foreground');
+    background-color: hsl(var(--color-background));
+    color: hsl(var(--color-foreground));
   }
 }
 

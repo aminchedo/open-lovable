@@ -93,13 +93,24 @@ export async function POST(request: NextRequest) {
     
     console.log('[scrape-screenshot] Screenshot captured successfully');
     
-    return NextResponse.json({
-      success: true,
-      screenshot: result.screenshot,
-      url: url,
-      metadata: result.metadata,
-      timestamp: new Date().toISOString()
-    });
+    // Check if result has screenshot property (success case)
+    if ('screenshot' in result) {
+      return NextResponse.json({
+        success: true,
+        screenshot: result.screenshot,
+        url: url,
+        metadata: result.metadata,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      // Error case
+      return NextResponse.json({
+        success: false,
+        error: 'Screenshot capture failed',
+        code: 'FIRECRAWL_SCREENSHOT_FAILED',
+        details: 'No screenshot data received'
+      }, { status: 500 });
+    }
     
   } catch (error: any) {
     console.error('[scrape-screenshot] Error details:', {

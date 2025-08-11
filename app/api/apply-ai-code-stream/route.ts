@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Sandbox } from '@e2b/code-interpreter';
+import { Sandbox } from 'e2b';
 import type { SandboxState } from '@/types/sandbox';
 import type { ConversationState } from '@/types/conversation';
 
@@ -104,7 +104,7 @@ function parseAIResponse(response: string): ParsedResponse {
   }
   
   // Convert map to array for sections.files
-  for (const [path, { content, isComplete }] of fileMap.entries()) {
+  Array.from(fileMap.entries()).forEach(([path, { content, isComplete }]) => {
     if (!isComplete) {
       console.log(`[apply-ai-code-stream] Warning: File ${path} appears to be truncated (no closing tag)`);
     }
@@ -122,7 +122,7 @@ function parseAIResponse(response: string): ParsedResponse {
         console.log(`[apply-ai-code-stream] 📦 Package detected from imports: ${pkg}`);
       }
     }
-  }
+  });
   
   // Also parse markdown code blocks with file paths
   const markdownFileRegex = /```(?:file )?path="([^"]+)"\n([\s\S]*?)```/g;
@@ -420,7 +420,7 @@ export async function POST(request: NextRequest) {
         const allPackages = [...packagesArray.filter(pkg => pkg && typeof pkg === 'string'), ...parsedPackages];
         
         // Use Set to remove duplicates, then filter out pre-installed packages
-        const uniquePackages = [...new Set(allPackages)]
+        const uniquePackages = Array.from(new Set(allPackages))
           .filter(pkg => pkg && typeof pkg === 'string' && pkg.trim() !== '') // Remove empty strings
           .filter(pkg => pkg !== 'react' && pkg !== 'react-dom'); // Filter pre-installed
         
@@ -521,7 +521,9 @@ export async function POST(request: NextRequest) {
           return !configFiles.includes(fileName);
         });
         
-        for (const [index, file] of filteredFiles.entries()) {
+        const fileEntries = Array.from(filteredFiles.entries());
+        for (let i = 0; i < fileEntries.length; i++) {
+          const [index, file] = fileEntries[i];
           try {
             // Send progress for each file
             await sendProgress({
@@ -608,7 +610,9 @@ print(f"File written: ${fullPath}")
             message: `Executing ${commandsArray.length} commands...`
           });
           
-          for (const [index, cmd] of commandsArray.entries()) {
+          const commandEntries = Array.from(commandsArray.entries());
+          for (let i = 0; i < commandEntries.length; i++) {
+            const [index, cmd] = commandEntries[i];
             try {
               await sendProgress({
                 type: 'command-progress',

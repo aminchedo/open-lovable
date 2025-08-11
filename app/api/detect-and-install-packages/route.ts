@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Remove duplicates
-    const uniquePackages = [...new Set(packageNames)];
+    const uniquePackages = Array.from(new Set(packageNames));
 
     console.log('[detect-and-install-packages] Packages to install:', uniquePackages);
 

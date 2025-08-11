@@ -67,7 +67,7 @@ function parseAIResponse(response: string): ParsedResponse {
   }
   
   // Convert map to array for sections.files
-  for (const [path, { content, isComplete }] of fileMap.entries()) {
+  Array.from(fileMap.entries()).forEach(([path, { content, isComplete }]) => {
     if (!isComplete) {
       console.log(`[parseAIResponse] Warning: File ${path} appears to be truncated (no closing tag)`);
     }
@@ -76,7 +76,7 @@ function parseAIResponse(response: string): ParsedResponse {
       path,
       content
     });
-  }
+  });
 
   // Parse commands
   const cmdRegex = /<command>(.*?)<\/command>/g;
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
     
     // Combine packages from tool calls and parsed XML tags
     const allPackages = [...packages.filter((pkg: any) => pkg && typeof pkg === 'string'), ...parsed.packages];
-    const uniquePackages = [...new Set(allPackages)]; // Remove duplicates
+    const uniquePackages = Array.from(new Set(allPackages)); // Remove duplicates
     
     if (uniquePackages.length > 0) {
       console.log('[apply-ai-code] Installing packages from XML tags and tool calls:', uniquePackages);

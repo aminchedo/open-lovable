@@ -1,88 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createGroq } from '@ai-sdk/groq';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { generateObject } from 'ai';
-import { z } from 'zod';
-import { appConfig } from '@/config/app.config';
-import type { FileManifest } from '@/types/file-manifest';
-
-const groq = createGroq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
-const anthropic = createAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  baseURL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
-});
-
-const openai = createOpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: process.env.OPENAI_BASE_URL,
-});
-
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-});
-
-// Add AvalAI (OpenAI-compatible) provider
-const avalai = createOpenAI({
-  apiKey: process.env.AVALAI_API_KEY,
-  baseURL: process.env.AVALAI_BASE_URL || 'https://api.avalai.ir/v1',
-});
-
-function validateProviderEnvOrThrow(model: string) {
-  if (model.startsWith('avalai/')) {
-    if (!process.env.AVALAI_API_KEY) {
-      throw new Error('AVALAI_API_KEY is not configured');
-    }
-  } else if (model.startsWith('google/')) {
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-      throw new Error('GOOGLE_GENERATIVE_AI_API_KEY is not configured');
-    }
-  } else if (model.startsWith('openai/')) {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY is not configured');
-    }
-  } else if (model.startsWith('anthropic/')) {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error('ANTHROPIC_API_KEY is not configured');
-    }
-  } else if (model.startsWith('groq/')) {
-    if (!process.env.GROQ_API_KEY) {
-      throw new Error('GROQ_API_KEY is not configured');
-    }
-  }
-}
-
-// Schema for the AI's search plan - not file selection!
-const searchPlanSchema = z.object({
-  editType: z.enum([
-    'UPDATE_COMPONENT',
-    'ADD_FEATURE', 
-    'FIX_ISSUE',
-    'UPDATE_STYLE',
-    'REFACTOR',
-    'ADD_DEPENDENCY',
-    'REMOVE_ELEMENT'
-  ]).describe('The type of edit being requested'),
-  
-  reasoning: z.string().describe('Explanation of the search strategy'),
-  
-  searchTerms: z.array(z.string()).describe('Specific text to search for (case-insensitive). Be VERY specific - exact button text, class names, etc.'),
-  
-  regexPatterns: z.array(z.string()).optional().describe('Regex patterns for finding code structures (e.g., "className=[\\"\\\'].*header.*[\\"\\\']")'),
-  
-  fileTypesToSearch: z.array(z.string()).default(['.jsx', '.tsx', '.js', '.ts']).describe('File extensions to search'),
-  
-  expectedMatches: z.number().min(1).max(10).default(1).describe('Expected number of matches (helps validate search worked)'),
-  
-  fallbackSearch: z.object({
-    terms: z.array(z.string()),
-    patterns: z.array(z.string()).optional()
-  }).optional().describe('Backup search if primary fails')
-});
 
 export async function POST(request: NextRequest) {
   try {
@@ -90,16 +6,10 @@ export async function POST(request: NextRequest) {
     
     console.log('[analyze-edit-intent] Request received');
     console.log('[analyze-edit-intent] Prompt:', prompt);
-    const modelFromConfig = (process.env.DEFAULT_MODEL as string) || 'google/gemini-pro';
-    const model = requestedModel || modelFromConfig;
-    console.log('[analyze-edit-intent] Model:', model);
-
-    // Validate provider env ahead of time
-    validateProviderEnvOrThrow(model);
-    console.log('[analyze-edit-intent] Manifest files count:', manifest?.files ? Object.keys(manifest.files).length : 0);
     
     if (!prompt || !manifest) {
       return NextResponse.json({
+        success: false,
         error: 'prompt and manifest are required'
       }, { status: 400 });
     }
@@ -130,45 +40,18 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
     
-    console.log('[analyze-edit-intent] Analyzing prompt:', prompt);
-    console.log('[analyze-edit-intent] File summary preview:', fileSummary.split('\n').slice(0, 5).join('\n'));
-    
-    // Select the appropriate AI model based on the request
-    const fallbackOrder = ((appConfig as any).ai?.fallbackOrder as string[]) || [
-      'google/gemini-pro',
-      'google/gemini-1.5-flash',
-      'avalai/gpt-4o-mini',
-      'avalai/gpt-5-mini',
-      'avalai/claude-4-opus',
-      'avalai/o3-pro'
-    ];
-    const attempts = [model, ...fallbackOrder.filter(m => m !== model)];
-    let lastError: any = null;
-    let result: any = null;
-
-    for (const attempt of attempts) {
+    // Try AvalAI first
+    const avalaiApiKey = process.env.AVALAI_API_KEY;
+    if (avalaiApiKey) {
       try {
-        let aiModel;
-        if (attempt.startsWith('anthropic/')) {
-          aiModel = anthropic(attempt.replace('anthropic/', ''));
-        } else if (attempt.startsWith('openai/')) {
-          if (attempt.includes('gpt-oss')) {
-            aiModel = groq(attempt);
-          } else {
-            aiModel = openai(attempt.replace('openai/', ''));
-          }
-        } else if (attempt.startsWith('google/')) {
-          aiModel = google(attempt.replace('google/', ''));
-        } else if (attempt.startsWith('avalai/')) {
-          aiModel = avalai(attempt.replace('avalai/', ''));
-        } else {
-          aiModel = groq(attempt);
-        }
+        const OpenAI = (await import('openai')).default;
+        const client = new OpenAI({
+          apiKey: avalaiApiKey,
+          baseURL: process.env.AVALAI_BASE_URL || 'https://api.avalai.ir/v1',
+        });
 
-        console.log('[analyze-edit-intent] Using AI model:', attempt);
-        result = await generateObject({
-          model: aiModel,
-          schema: searchPlanSchema,
+        const response = await client.chat.completions.create({
+          model: 'gpt-4',
           messages: [
             {
               role: 'system',
@@ -199,7 +82,17 @@ SEARCH STRATEGY RULES:
    - Add regex patterns for structural searches
 
 Current project structure for context:
-${fileSummary}`
+${fileSummary}
+
+Respond with a JSON object containing:
+{
+  "editType": "UPDATE_COMPONENT|ADD_FEATURE|FIX_ISSUE|UPDATE_STYLE|REFACTOR|ADD_DEPENDENCY|REMOVE_ELEMENT",
+  "reasoning": "explanation of the search strategy",
+  "searchTerms": ["specific", "search", "terms"],
+  "regexPatterns": ["optional", "regex", "patterns"],
+  "fileTypesToSearch": [".jsx", ".tsx", ".js", ".ts"],
+  "expectedMatches": 1
+}`
             },
             {
               role: 'user',
@@ -207,32 +100,93 @@ ${fileSummary}`
 
 Create a search plan to find the exact code that needs to be modified. Include specific search terms and patterns.`
             }
-          ]
+          ],
+          max_tokens: 1000,
+          temperature: 0.3,
         });
-        break;
-      } catch (err) {
-        console.warn('[analyze-edit-intent] Model failed:', attempt, (err as Error).message);
-        lastError = err;
-        result = null;
-        continue;
+
+        const content = response.choices[0]?.message?.content;
+        if (content) {
+          try {
+            const searchPlan = JSON.parse(content);
+            console.log('[analyze-edit-intent] Search plan created:', searchPlan);
+            
+            return NextResponse.json({
+              success: true,
+              searchPlan: searchPlan
+            });
+          } catch (parseError) {
+            console.error('[analyze-edit-intent] Failed to parse response:', parseError);
+          }
+        }
+      } catch (avalaiError) {
+        console.log('[analyze-edit-intent] AvalAI failed, trying Google AI');
       }
     }
+    
+    // Fallback to Google AI
+    const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    if (googleApiKey) {
+      try {
+        const { GoogleGenerativeAI } = await import('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(googleApiKey);
+        const googleModel = genAI.getGenerativeModel({ model: 'gemini-pro' });
+        
+        const result = await googleModel.generateContent(`
+You are an expert at planning code searches. Your job is to create a search strategy to find the exact code that needs to be edited.
 
-    if (!result) {
-      throw new Error(`All AI models failed for analyze-edit-intent: ${(lastError as Error)?.message || 'unknown'}`);
+Current project structure for context:
+${fileSummary}
+
+User request: "${prompt}"
+
+Create a search plan to find the exact code that needs to be modified. Include specific search terms and patterns.
+
+Respond with a JSON object containing:
+{
+  "editType": "UPDATE_COMPONENT",
+  "reasoning": "explanation of the search strategy",
+  "searchTerms": ["specific", "search", "terms"],
+  "regexPatterns": ["optional", "regex", "patterns"],
+  "fileTypesToSearch": [".jsx", ".tsx", ".js", ".ts"],
+  "expectedMatches": 1
+}
+        `);
+        
+        const response = await result.response;
+        const content = response.text();
+        
+        try {
+          const searchPlan = JSON.parse(content);
+          console.log('[analyze-edit-intent] Search plan created (Google):', searchPlan);
+          
+          return NextResponse.json({
+            success: true,
+            searchPlan: searchPlan
+          });
+        } catch (parseError) {
+          console.error('[analyze-edit-intent] Failed to parse Google response:', parseError);
+        }
+      } catch (googleError) {
+        console.error('[analyze-edit-intent] Google AI failed:', googleError);
+      }
     }
     
-    console.log('[analyze-edit-intent] Search plan created:', {
-      editType: result.object.editType,
-      searchTerms: result.object.searchTerms,
-      patterns: result.object.regexPatterns?.length || 0,
-      reasoning: result.object.reasoning
-    });
+    // Fallback to simple keyword-based search
+    const fallbackSearchPlan = {
+      editType: 'UPDATE_COMPONENT',
+      reasoning: 'Keyword-based search as fallback',
+      searchTerms: [prompt.toLowerCase().split(' ').filter(word => word.length > 3).slice(0, 3)],
+      regexPatterns: [],
+      fileTypesToSearch: ['.jsx', '.tsx', '.js', '.ts'],
+      expectedMatches: 1
+    };
     
-    // Return the search plan, not file matches
+    console.log('[analyze-edit-intent] Using fallback search plan');
+    
     return NextResponse.json({
       success: true,
-      searchPlan: result.object
+      searchPlan: fallbackSearchPlan
     });
     
   } catch (error) {

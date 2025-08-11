@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Sandbox } from '@e2b/code-interpreter';
+import { Sandbox } from 'e2b';
 
 declare global {
   var activeSandbox: any;
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Validate and deduplicate package names
-    const validPackages = [...new Set(packages)]
+    const validPackages = Array.from(new Set(packages))
       .filter(pkg => pkg && typeof pkg === 'string' && pkg.trim() !== '')
       .map(pkg => pkg.trim());
     
