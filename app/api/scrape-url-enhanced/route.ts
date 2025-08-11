@@ -1,60 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-function isValidUrl(url: string): boolean {
-  try {
-    const urlObj = new URL(url);
-    return ['http:', 'https:'].includes(urlObj.protocol) && 
-           urlObj.hostname.includes('.') && 
-           urlObj.hostname.length > 3;
-  } catch {
-    return false;
-  }
-}
-
 export async function POST(request: NextRequest) {
-  console.log('[scrape-url-enhanced] Starting enhanced scraping');
+  console.log('[scrape-url-enhanced] Starting request');
   
   try {
     const firecrawlApiKey = process.env.FIRECRAWL_API_KEY;
     
     if (!firecrawlApiKey) {
+      console.error('[scrape-url-enhanced] FIRECRAWL_API_KEY missing');
       return NextResponse.json(
-        { error: 'FIRECRAWL_API_KEY not configured', code: 'MISSING_KEY' },
+        { error: 'FIRECRAWL_API_KEY not configured in environment variables' },
         { status: 500 }
       );
     }
+
+    console.log('[scrape-url-enhanced] API key found, length:', firecrawlApiKey.length);
 
     const body = await request.json();
     let { url, options = {} } = body;
     
     if (!url) {
       return NextResponse.json(
-        { error: 'URL is required', code: 'MISSING_URL' },
+        { error: 'URL is required' },
         { status: 400 }
       );
     }
 
-    // Clean and format URL
+    // URL formatting
     url = url.trim();
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = 'https://' + url;
     }
 
-    if (!isValidUrl(url)) {
-      return NextResponse.json(
-        { 
-          error: 'Invalid URL format', 
-          code: 'INVALID_URL',
-          message: 'Please provide a valid URL like https://example.com' 
-        },
-        { status: 400 }
-      );
-    }
-
     console.log('[scrape-url-enhanced] Processing URL:', url);
 
-    const FirecrawlApp = (await import('@mendable/firecrawl-js')).default;
-    const app = new FirecrawlApp({ apiKey: firecrawlApiKey });
+    const { FirecrawlApp } = await import('@mendable/firecrawl-js');
+    
+    // Explicit API key configuration
+    const app = new FirecrawlApp({ 
+      apiKey: firecrawlApiKey 
+    });
     
     const scrapeResponse = await app.scrapeUrl(url, {
       formats: ['markdown', 'html'],
@@ -73,28 +58,20 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('[scrape-url-enhanced] Error:', error.message);
+    console.error('[scrape-url-enhanced] Error details:', {
+      message: error.message,
+      stack: error.stack
+    });
     
-    if (error.message?.includes('401') || error.message?.includes('Invalid API key')) {
+    if (error.message?.includes('Unauthorized') || error.message?.includes('Invalid token')) {
       return NextResponse.json(
-        { error: 'Invalid Firecrawl API key', code: 'INVALID_FIRECRAWL_KEY' },
+        { error: 'Invalid Firecrawl API key. Check environment variables.' },
         { status: 401 }
       );
     }
     
-    if (error.message?.includes('URL must have a valid top-level domain')) {
-      return NextResponse.json(
-        { 
-          error: 'Invalid URL domain', 
-          code: 'INVALID_URL_DOMAIN',
-          message: 'Please use a complete URL with valid domain' 
-        },
-        { status: 400 }
-      );
-    }
-    
     return NextResponse.json(
-      { error: 'Scraping failed', code: 'SCRAPING_FAILED', message: error.message },
+      { error: 'Enhanced scraping failed', details: error.message },
       { status: 500 }
     );
   }

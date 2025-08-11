@@ -103,26 +103,36 @@ function validateProviderEnvOrThrow(model: string) {
 }
 
 export async function POST(request: NextRequest) {
+  console.log('[generate-ai-code-stream] Starting request');
+  
   try {
+    // Check if we have alternative AI APIs instead of Groq
+    const avalaiApiKey = process.env.AVALAI_API_KEY;
+    const groqApiKey = process.env.GROQ_API_KEY;
+    
+    if (!avalaiApiKey && !groqApiKey) {
+      return NextResponse.json(
+        { error: 'No AI API keys configured. Need AVALAI_API_KEY or GROQ_API_KEY.' },
+        { status: 500 }
+      );
+    }
+
     const { prompt, model: requestedModel, context, isEdit = false } = await request.json();
     
     console.log('[generate-ai-code-stream] Received request:');
     console.log('[generate-ai-code-stream] - prompt:', prompt);
     console.log('[generate-ai-code-stream] - isEdit:', isEdit);
-    const modelFromConfig = (process.env.DEFAULT_MODEL as string) || 'google/gemini-pro';
+    const modelFromConfig = (process.env.DEFAULT_MODEL as string) || 'avalai/gpt-5-mini';
     const model = requestedModel || modelFromConfig;
     console.log('[generate-ai-code-stream] - model:', model);
-
-    // Validate provider env ahead of time
-    validateProviderEnvOrThrow(model);
     
     const fallbackOrder = ((appConfig as any).ai?.fallbackOrder as string[]) || [
-      'google/gemini-pro',
-      'google/gemini-1.5-flash',
-      'avalai/gpt-4o-mini',
       'avalai/gpt-5-mini',
+      'avalai/gpt-4o-mini',
       'avalai/claude-4-opus',
-      'avalai/o3-pro'
+      'avalai/o3-pro',
+      'google/gemini-pro',
+      'google/gemini-1.5-flash'
     ];
     console.log('[generate-ai-code-stream] - context.sandboxId:', context?.sandboxId);
     console.log('[generate-ai-code-stream] - context.currentFiles:', context?.currentFiles ? Object.keys(context.currentFiles) : 'none');
