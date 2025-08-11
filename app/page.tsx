@@ -1458,6 +1458,34 @@ Tip: I automatically detect and install npm packages from your code imports (lik
     return null;
   };
 
+  // Smart model recommendation based on user input
+  const getRecommendedModel = (input: string): string => {
+    const lowerInput = input.toLowerCase();
+    
+    // Check for specific task patterns
+    if (lowerInput.includes('clone') || lowerInput.includes('website') || lowerInput.includes('copy')) {
+      return appConfig.ai.modelRecommendations['website-cloning'];
+    }
+    if (lowerInput.includes('code') || lowerInput.includes('function') || lowerInput.includes('component') || lowerInput.includes('api')) {
+      return appConfig.ai.modelRecommendations['code-generation'];
+    }
+    if (lowerInput.includes('creative') || lowerInput.includes('design') || lowerInput.includes('style') || lowerInput.includes('color')) {
+      return appConfig.ai.modelRecommendations['creative-writing'];
+    }
+    if (lowerInput.includes('reason') || lowerInput.includes('logic') || lowerInput.includes('complex') || lowerInput.includes('algorithm')) {
+      return appConfig.ai.modelRecommendations['complex-reasoning'];
+    }
+    if (lowerInput.includes('fast') || lowerInput.includes('quick') || lowerInput.includes('simple')) {
+      return appConfig.ai.modelRecommendations['fast-responses'];
+    }
+    if (lowerInput.includes('audio') || lowerInput.includes('voice') || lowerInput.includes('speech')) {
+      return appConfig.ai.modelRecommendations['audio-processing'];
+    }
+    
+    // Default recommendation
+    return appConfig.ai.defaultModel;
+  };
+
   const sendChatMessage = async () => {
     const message = aiChatInput.trim();
     if (!message) return;
@@ -2959,29 +2987,97 @@ Focus on the key sections and content, making it clean and modern.`;
               
               {/* Model Selector */}
               <div className="mt-6 flex items-center justify-center animate-[fadeIn_1s_ease-out]">
-                <select
-                  value={aiModel}
-                  onChange={(e) => {
-                    const newModel = e.target.value;
-                    setAiModel(newModel);
-                    const params = (() => { try { return new URLSearchParams(window.location.search); } catch { return new URLSearchParams(); } })();
-                    params.set('model', newModel);
-                    if (sandboxData?.sandboxId) {
-                      params.set('sandbox', sandboxData.sandboxId);
-                    }
-                    router.push(`/?${params.toString()}`);
-                  }}
-                  className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-[10px] focus:outline-none focus:ring-2 focus:ring-[#36322F] focus:border-transparent"
-                  style={{
-                    boxShadow: '0 0 0 1px #e3e1de66, 0 1px 2px #5f4a2e14'
-                  }}
-                >
-                  {appConfig.ai.availableModels.map(model => (
-                    <option key={model} value={model}>
-                      {(appConfig.ai.modelDisplayNames as any)[model] || model}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative w-full max-w-md">
+                  <select
+                    value={aiModel}
+                    onChange={(e) => {
+                      const newModel = e.target.value;
+                      setAiModel(newModel);
+                      const params = (() => { try { return new URLSearchParams(window.location.search); } catch { return new URLSearchParams(); } })();
+                      params.set('model', newModel);
+                      if (sandboxData?.sandboxId) {
+                        params.set('sandbox', sandboxData.sandboxId);
+                      }
+                      router.push(`/?${params.toString()}`);
+                    }}
+                    className="w-full px-4 py-2.5 text-sm bg-white border border-gray-300 rounded-[12px] focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent appearance-none cursor-pointer"
+                    style={{
+                      boxShadow: '0 0 0 1px #e3e1de66, 0 1px 2px #5f4a2e14'
+                    }}
+                  >
+                    {/* Premium Models Section */}
+                    <optgroup label="🚀 Latest & Most Advanced">
+                      {appConfig.ai.modelCategories['🚀 Latest & Most Advanced']?.map(model => (
+                        <option key={model} value={model}>
+                          {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                        </option>
+                      ))}
+                    </optgroup>
+                    
+                    <optgroup label="⚡ Fast & Efficient">
+                      {appConfig.ai.modelCategories['⚡ Fast & Efficient']?.map(model => (
+                        <option key={model} value={model}>
+                          {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                        </option>
+                      ))}
+                    </optgroup>
+                    
+                    <optgroup label="💻 Specialized Coding">
+                      {appConfig.ai.modelCategories['💻 Specialized Coding']?.map(model => (
+                        <option key={model} value={model}>
+                          {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                        </option>
+                      ))}
+                    </optgroup>
+                    
+                    <optgroup label="🎭 Creative & Writing">
+                      {appConfig.ai.modelCategories['🎭 Creative & Writing']?.map(model => (
+                        <option key={model} value={model}>
+                          {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                        </option>
+                      ))}
+                    </optgroup>
+                    
+                    <optgroup label="🧠 Advanced Reasoning">
+                      {appConfig.ai.modelCategories['🧠 Advanced Reasoning']?.map(model => (
+                        <option key={model} value={model}>
+                          {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                        </option>
+                      ))}
+                    </optgroup>
+                    
+                    <optgroup label="🎯 Fast Inference">
+                      {appConfig.ai.modelCategories['🎯 Fast Inference']?.map(model => (
+                        <option key={model} value={model}>
+                          {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                        </option>
+                      ))}
+                    </optgroup>
+                    
+                    <optgroup label="🔧 Utility & Tools">
+                      {appConfig.ai.modelCategories['🔧 Utility & Tools']?.map(model => (
+                        <option key={model} value={model}>
+                          {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                        </option>
+                      ))}
+                    </optgroup>
+                    
+                    <optgroup label="📚 Legacy Models">
+                      {appConfig.ai.modelCategories['📚 Legacy Models']?.map(model => (
+                        <option key={model} value={model}>
+                          {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                  
+                  {/* Custom dropdown arrow */}
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2998,26 +3094,94 @@ Focus on the key sections and content, making it clean and modern.`;
         </div>
         <div className="flex items-center gap-2">
           {/* Model Selector - Left side */}
-          <select
-            value={aiModel}
-            onChange={(e) => {
-              const newModel = e.target.value;
-              setAiModel(newModel);
-              const params = (() => { try { return new URLSearchParams(window.location.search); } catch { return new URLSearchParams(); } })();
-              params.set('model', newModel);
-              if (sandboxData?.sandboxId) {
-                params.set('sandbox', sandboxData.sandboxId);
-              }
-              router.push(`/?${params.toString()}`);
-            }}
-            className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-[10px] focus:outline-none focus:ring-2 focus:ring-[#36322F] focus:border-transparent"
-          >
-            {appConfig.ai.availableModels.map(model => (
-              <option key={model} value={model}>
-                {(appConfig.ai.modelDisplayNames as any)[model] || model}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={aiModel}
+              onChange={(e) => {
+                const newModel = e.target.value;
+                setAiModel(newModel);
+                const params = (() => { try { return new URLSearchParams(window.location.search); } catch { return new URLSearchParams(); } })();
+                params.set('model', newModel);
+                if (sandboxData?.sandboxId) {
+                  params.set('sandbox', sandboxData.sandboxId);
+                }
+                router.push(`/?${params.toString()}`);
+              }}
+              className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-[10px] focus:outline-none focus:ring-2 focus:ring-[#36322F] focus:border-transparent appearance-none cursor-pointer pr-8"
+            >
+              {/* Premium Models Section */}
+              <optgroup label="🚀 Latest & Most Advanced">
+                {appConfig.ai.modelCategories['🚀 Latest & Most Advanced']?.map(model => (
+                  <option key={model} value={model}>
+                    {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                  </option>
+                ))}
+              </optgroup>
+              
+              <optgroup label="⚡ Fast & Efficient">
+                {appConfig.ai.modelCategories['⚡ Fast & Efficient']?.map(model => (
+                  <option key={model} value={model}>
+                    {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                  </option>
+                ))}
+              </optgroup>
+              
+              <optgroup label="💻 Specialized Coding">
+                {appConfig.ai.modelCategories['💻 Specialized Coding']?.map(model => (
+                  <option key={model} value={model}>
+                    {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                  </option>
+                ))}
+              </optgroup>
+              
+              <optgroup label="🎭 Creative & Writing">
+                {appConfig.ai.modelCategories['🎭 Creative & Writing']?.map(model => (
+                  <option key={model} value={model}>
+                    {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                  </option>
+                ))}
+              </optgroup>
+              
+              <optgroup label="🧠 Advanced Reasoning">
+                {appConfig.ai.modelCategories['🧠 Advanced Reasoning']?.map(model => (
+                  <option key={model} value={model}>
+                    {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                  </option>
+                ))}
+              </optgroup>
+              
+              <optgroup label="🎯 Fast Inference">
+                {appConfig.ai.modelCategories['🎯 Fast Inference']?.map(model => (
+                  <option key={model} value={model}>
+                    {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                  </option>
+                ))}
+              </optgroup>
+              
+              <optgroup label="🔧 Utility & Tools">
+                {appConfig.ai.modelCategories['🔧 Utility & Tools']?.map(model => (
+                  <option key={model} value={model}>
+                    {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                  </option>
+                ))}
+              </optgroup>
+              
+              <optgroup label="📚 Legacy Models">
+                {appConfig.ai.modelCategories['📚 Legacy Models']?.map(model => (
+                  <option key={model} value={model}>
+                    {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            
+            {/* Custom dropdown arrow */}
+            <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+              <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
           <Button 
             variant="code"
             onClick={() => createSandbox()}
@@ -3309,6 +3473,14 @@ Focus on the key sections and content, making it clean and modern.`;
                 }}
                 rows={3}
               />
+              
+              {/* Smart Model Recommendation */}
+              {aiChatInput.trim().length > 10 && (
+                <div className="absolute top-1 left-1 bg-orange-100 border border-orange-300 rounded-lg px-2 py-1 text-xs text-orange-800 animate-[fadeIn_0.3s_ease-out]">
+                  💡 Recommended: {(appConfig.ai.modelDisplayNames as any)[getRecommendedModel(aiChatInput)] || getRecommendedModel(aiChatInput)}
+                </div>
+              )}
+              
               <button
                 onClick={sendChatMessage}
                 className="absolute right-2 bottom-2 p-2 bg-[#36322F] text-white rounded-[10px] hover:bg-[#4a4542] [box-shadow:inset_0px_-2px_0px_0px_#171310,_0px_1px_6px_0px_rgba(58,_33,_8,_58%)] hover:translate-y-[1px] hover:scale-[0.98] hover:[box-shadow:inset_0px_-1px_0px_0px_#171310,_0px_1px_3px_0px_rgba(58,_33,_8,_40%)] active:translate-y-[2px] active:scale-[0.97] active:[box-shadow:inset_0px_1px_1px_0px_#171310,_0px_1px_2px_0px_rgba(58,_33,_8,_30%)] transition-all duration-200"
