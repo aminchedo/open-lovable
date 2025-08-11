@@ -1,18 +1,21 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  /* config options here */
-  typescript: {
-    // Allow production builds to successfully complete even if
-    // your project has type errors.
-    ignoreBuildErrors: true,
-  },
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   eslint: {
-    // Warning: This allows production builds to successfully complete even if
-    // your project has ESLint errors.
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: true, // Skip ESLint errors during build
   },
-  webpack: (config) => {
+  typescript: {
+    ignoreBuildErrors: true, // Skip TypeScript errors during build
+  },
+  serverExternalPackages: ['@e2b/code-interpreter'],
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      }
+    }
     config.resolve.alias = {
       ...config.resolve.alias,
       'sharp$': false,
@@ -20,6 +23,12 @@ const nextConfig: NextConfig = {
     }
     return config
   },
-};
+  env: {
+    E2B_API_KEY: process.env.E2B_API_KEY,
+    FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
+    AVALAI_API_KEY: process.env.AVALAI_API_KEY,
+    GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+  }
+}
 
-export default nextConfig;
+module.exports = nextConfig
