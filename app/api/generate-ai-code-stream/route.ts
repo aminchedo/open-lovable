@@ -80,11 +80,21 @@ declare global {
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, model = 'openai/gpt-oss-20b', context, isEdit = false } = await request.json();
+    const { prompt, model: requestedModel, context, isEdit = false } = await request.json();
     
     console.log('[generate-ai-code-stream] Received request:');
     console.log('[generate-ai-code-stream] - prompt:', prompt);
     console.log('[generate-ai-code-stream] - isEdit:', isEdit);
+    const modelFromConfig = (appConfig as any).ai?.defaultModel || 'google/gemini-pro';
+    const model = requestedModel || modelFromConfig;
+    const fallbackOrder = ((appConfig as any).ai?.fallbackOrder as string[]) || [
+      'google/gemini-pro',
+      'google/gemini-1.5-flash',
+      'avalai/gpt-4o-mini',
+      'avalai/gpt-5-mini',
+      'avalai/claude-4-opus',
+      'avalai/o3-pro'
+    ];
     console.log('[generate-ai-code-stream] - context.sandboxId:', context?.sandboxId);
     console.log('[generate-ai-code-stream] - context.currentFiles:', context?.currentFiles ? Object.keys(context.currentFiles) : 'none');
     console.log('[generate-ai-code-stream] - currentFiles count:', context?.currentFiles ? Object.keys(context.currentFiles).length : 0);
@@ -1165,24 +1175,30 @@ CRITICAL: When files are provided in the context:
         // Track packages that need to be installed
         const packagesToInstall: string[] = [];
         
-                // Determine which provider to use based on model
-        const isAnthropic = model.startsWith('anthropic/');
-        const isOpenAI = model.startsWith('openai/');
-        const isGoogle = model.startsWith('google/');
-        const isAvalAI = model.startsWith('avalai/');
-        const modelProvider = isAnthropic ? anthropic : (isOpenAI ? openai : (isGoogle ? google : (isAvalAI ? avalai : groq)));
-        const actualModel = isAnthropic ? model.replace('anthropic/', '') : 
-                         isOpenAI ? model.replace('openai/', '') :
-                         isGoogle ? model.replace('google/', '') :
-                         isAvalAI ? model.replace('avalai/', '') : model;
-        
-        // Make streaming API call with appropriate provider
-        const streamOptions: any = {
-          model: modelProvider(actualModel),
-          messages: [
-            { 
-              role: 'system', 
-              content: systemPrompt + `
+        // Smart fallback: attempt requested/default model, then fallback list
+        const attempts: string[] = [model, ...fallbackOrder.filter(m => m !== model)];
+        let usedModel = model;
+        let result: any = null;
+
+        for (const attemptModel of attempts) {
+          try {
+            // Determine which provider to use based on model
+            const isAnthropic = attemptModel.startsWith('anthropic/');
+            const isOpenAI = attemptModel.startsWith('openai/');
+            const isGoogle = attemptModel.startsWith('google/');
+            const isAvalAI = attemptModel.startsWith('avalai/');
+            const modelProvider = isAnthropic ? anthropic : (isOpenAI ? openai : (isGoogle ? google : (isAvalAI ? avalai : groq)));
+            const actualModel = isAnthropic ? attemptModel.replace('anthropic/', '') : 
+                             isOpenAI ? attemptModel.replace('openai/', '') :
+                             isGoogle ? attemptModel.replace('google/', '') :
+                             isAvalAI ? attemptModel.replace('avalai/', '') : attemptModel;
+            
+            const streamOptions: any = {
+              model: modelProvider(actualModel),
+              messages: [
+                { 
+                  role: 'system', 
+                  content: systemPrompt + `
 
 🚨 CRITICAL CODE GENERATION RULES - VIOLATION = FAILURE 🚨:
 1. NEVER truncate ANY code - ALWAYS write COMPLETE files
@@ -1217,10 +1233,10 @@ Examples of CORRECT CODE (ALWAYS DO THIS):
 ✅ import { useState, useEffect, useCallback } from 'react'
 
 REMEMBER: It's better to generate fewer COMPLETE files than many INCOMPLETE files.`
-            },
-            { 
-              role: 'user', 
-              content: fullPrompt + `
+                },
+                { 
+                  role: 'user', 
+                  content: fullPrompt + `
 
 CRITICAL: You MUST complete EVERY file you start. If you write:
 <file path="src/components/Hero.jsx">
@@ -1237,29 +1253,43 @@ ALWAYS write complete code:
 
 If you're running out of space, generate FEWER files but make them COMPLETE.
 It's better to have 3 complete files than 10 incomplete files.`
+                }
+              ],
+              maxTokens: 8192,
+              stopSequences: []
+            };
+            
+            // Add temperature for non-reasoning models
+            if (!attemptModel.startsWith('openai/gpt-5')) {
+              streamOptions.temperature = 0.7;
             }
-          ],
-          maxTokens: 8192, // Reduce to ensure completion
-          stopSequences: [] // Don't stop early
-          // Note: Neither Groq nor Anthropic models support tool/function calling in this context
-          // We use XML tags for package detection instead
-        };
-        
-        // Add temperature for non-reasoning models
-        if (!model.startsWith('openai/gpt-5')) {
-          streamOptions.temperature = 0.7;
-        }
-        
-        // Add reasoning effort for GPT-5 models
-        if (isOpenAI) {
-          streamOptions.experimental_providerMetadata = {
-            openai: {
-              reasoningEffort: 'high'
+            
+            // Add reasoning effort for GPT-5 models
+            if (isOpenAI) {
+              streamOptions.experimental_providerMetadata = {
+                openai: {
+                  reasoningEffort: 'high'
+                }
+              };
             }
-          };
+            
+            result = await streamText(streamOptions);
+            usedModel = attemptModel;
+            if (attemptModel !== model) {
+              await sendProgress({ type: 'status', message: `Fallback succeeded with ${attemptModel}` });
+            }
+            break; // success
+          } catch (err) {
+            console.warn(`[generate-ai-code-stream] Model ${attemptModel} failed:`, (err as Error).message);
+            await sendProgress({ type: 'status', message: `Model ${attemptModel} failed, trying next...` });
+            result = null;
+            continue;
+          }
         }
-        
-        const result = await streamText(streamOptions);
+
+        if (!result) {
+          throw new Error('All AI models failed to start streaming');
+        }
         
         // Stream the response and parse in real-time
         let generatedCode = '';
@@ -1681,7 +1711,7 @@ Provide the complete file content without any truncation. Include all necessary 
           explanation,
           files: files.length,
           components: componentCount,
-          model,
+          model: usedModel,
           packagesToInstall: packagesToInstall.length > 0 ? packagesToInstall : undefined,
           warnings: truncationWarnings.length > 0 ? truncationWarnings : undefined
         });

@@ -5,6 +5,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import { appConfig } from '@/config/app.config';
 import type { FileManifest } from '@/types/file-manifest';
 
 const groq = createGroq({
@@ -61,10 +62,12 @@ const searchPlanSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, manifest, model = 'openai/gpt-oss-20b' } = await request.json();
+    const { prompt, manifest, model: requestedModel } = await request.json();
     
     console.log('[analyze-edit-intent] Request received');
     console.log('[analyze-edit-intent] Prompt:', prompt);
+    const modelFromConfig = (process.env.DEFAULT_MODEL as string) || 'google/gemini-pro';
+    const model = requestedModel || modelFromConfig;
     console.log('[analyze-edit-intent] Model:', model);
     console.log('[analyze-edit-intent] Manifest files count:', manifest?.files ? Object.keys(manifest.files).length : 0);
     
@@ -104,34 +107,45 @@ export async function POST(request: NextRequest) {
     console.log('[analyze-edit-intent] File summary preview:', fileSummary.split('\n').slice(0, 5).join('\n'));
     
     // Select the appropriate AI model based on the request
-    let aiModel;
-    if (model.startsWith('anthropic/')) {
-      aiModel = anthropic(model.replace('anthropic/', ''));
-    } else if (model.startsWith('openai/')) {
-      if (model.includes('gpt-oss')) {
-        aiModel = groq(model);
-      } else {
-        aiModel = openai(model.replace('openai/', ''));
-      }
-    } else if (model.startsWith('google/')) {
-      aiModel = google(model.replace('google/', ''));
-    } else if (model.startsWith('avalai/')) {
-      aiModel = avalai(model.replace('avalai/', ''));
-    } else {
-      // Default to groq if model format is unclear
-      aiModel = groq(model);
-    }
-    
-    console.log('[analyze-edit-intent] Using AI model:', model);
-    
-    // Use AI to create a search plan
-    const result = await generateObject({
-      model: aiModel,
-      schema: searchPlanSchema,
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert at planning code searches. Your job is to create a search strategy to find the exact code that needs to be edited.
+    const fallbackOrder = ((appConfig as any).ai?.fallbackOrder as string[]) || [
+      'google/gemini-pro',
+      'google/gemini-1.5-flash',
+      'avalai/gpt-4o-mini',
+      'avalai/gpt-5-mini',
+      'avalai/claude-4-opus',
+      'avalai/o3-pro'
+    ];
+    const attempts = [model, ...fallbackOrder.filter(m => m !== model)];
+    let lastError: any = null;
+    let result: any = null;
+
+    for (const attempt of attempts) {
+      try {
+        let aiModel;
+        if (attempt.startsWith('anthropic/')) {
+          aiModel = anthropic(attempt.replace('anthropic/', ''));
+        } else if (attempt.startsWith('openai/')) {
+          if (attempt.includes('gpt-oss')) {
+            aiModel = groq(attempt);
+          } else {
+            aiModel = openai(attempt.replace('openai/', ''));
+          }
+        } else if (attempt.startsWith('google/')) {
+          aiModel = google(attempt.replace('google/', ''));
+        } else if (attempt.startsWith('avalai/')) {
+          aiModel = avalai(attempt.replace('avalai/', ''));
+        } else {
+          aiModel = groq(attempt);
+        }
+
+        console.log('[analyze-edit-intent] Using AI model:', attempt);
+        result = await generateObject({
+          model: aiModel,
+          schema: searchPlanSchema,
+          messages: [
+            {
+              role: 'system',
+              content: `You are an expert at planning code searches. Your job is to create a search strategy to find the exact code that needs to be edited.
 
 DO NOT GUESS which files to edit. Instead, provide specific search terms that will locate the code.
 
@@ -159,15 +173,27 @@ SEARCH STRATEGY RULES:
 
 Current project structure for context:
 ${fileSummary}`
-        },
-        {
-          role: 'user',
-          content: `User request: "${prompt}"
+            },
+            {
+              role: 'user',
+              content: `User request: "${prompt}"
 
 Create a search plan to find the exact code that needs to be modified. Include specific search terms and patterns.`
-        }
-      ]
-    });
+            }
+          ]
+        });
+        break;
+      } catch (err) {
+        console.warn('[analyze-edit-intent] Model failed:', attempt, (err as Error).message);
+        lastError = err;
+        result = null;
+        continue;
+      }
+    }
+
+    if (!result) {
+      throw new Error(`All AI models failed for analyze-edit-intent: ${(lastError as Error)?.message || 'unknown'}`);
+    }
     
     console.log('[analyze-edit-intent] Search plan created:', {
       editType: result.object.editType,

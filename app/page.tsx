@@ -2969,18 +2969,24 @@ Focus on the key sections and content, making it clean and modern.`;
                     if (sandboxData?.sandboxId) {
                       params.set('sandbox', sandboxData.sandboxId);
                     }
-                    router.push(`/?${params.toString()}`);
+                    router.push(`/?${params.toString()}`, { scroll: false });
                   }}
                   className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-[10px] focus:outline-none focus:ring-2 focus:ring-[#36322F] focus:border-transparent"
-                  style={{
-                    boxShadow: '0 0 0 1px #e3e1de66, 0 1px 2px #5f4a2e14'
-                  }}
                 >
-                  {appConfig.ai.availableModels.map(model => (
-                    <option key={model} value={model}>
-                      {(appConfig.ai.modelDisplayNames as any)[model] || model}
-                    </option>
-                  ))}
+                  <optgroup label="🆓 Free Models (Try First)">
+                    {appConfig.ai.freeModels.map(model => (
+                      <option key={`free-${model}`} value={model}>
+                        {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="💎 Premium Models (Backup)">
+                    {appConfig.ai.premiumModels.map(model => (
+                      <option key={`premium-${model}`} value={model}>
+                        {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
             </div>
@@ -3008,15 +3014,24 @@ Focus on the key sections and content, making it clean and modern.`;
               if (sandboxData?.sandboxId) {
                 params.set('sandbox', sandboxData.sandboxId);
               }
-              router.push(`/?${params.toString()}`);
+              router.push(`/?${params.toString()}`, { scroll: false });
             }}
             className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-[10px] focus:outline-none focus:ring-2 focus:ring-[#36322F] focus:border-transparent"
           >
-            {appConfig.ai.availableModels.map(model => (
-              <option key={model} value={model}>
-                {(appConfig.ai.modelDisplayNames as any)[model] || model}
-              </option>
-            ))}
+            <optgroup label="🆓 Free Models (Try First)">
+              {appConfig.ai.freeModels.map(model => (
+                <option key={`free-${model}`} value={model}>
+                  {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="💎 Premium Models (Backup)">
+              {appConfig.ai.premiumModels.map(model => (
+                <option key={`premium-${model}`} value={model}>
+                  {(appConfig.ai.modelDisplayNames as any)[model] || model}
+                </option>
+              ))}
+            </optgroup>
           </select>
           <Button 
             variant="code"
