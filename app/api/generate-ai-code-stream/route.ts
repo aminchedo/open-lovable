@@ -15,10 +15,93 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const { prompt, model = 'gpt-5-mini' } = body;
+ 
 
-    if (!prompt) {
+ 
+export async function POST(request: NextRequest) {
+  console.log('[generate-ai-code-stream] Starting request');
+  
+  try {
+    // Check if we have alternative AI APIs instead of Groq
+    const avalaiApiKey = process.env.AVALAI_API_KEY;
+    const groqApiKey = process.env.GROQ_API_KEY;
+    
+    if (!avalaiApiKey && !groqApiKey) {
+      return NextResponse.json(
+        { error: 'No AI API keys configured. Need AVALAI_API_KEY or GROQ_API_KEY.' },
+        { status: 500 }
+      );
+    }
+
+    const { prompt, model: requestedModel, context, isEdit = false } = await request.json();
+    
+    console.log('[generate-ai-code-stream] Received request:');
+    console.log('[generate-ai-code-stream] - prompt:', prompt);
+    console.log('[generate-ai-code-stream] - isEdit:', isEdit);
+    const modelFromConfig = (process.env.DEFAULT_MODEL as string) || 'avalai/gpt-5-mini';
+    const model = requestedModel || modelFromConfig;
+    console.log('[generate-ai-code-stream] - model:', model);
+    
+    const fallbackOrder = ((appConfig as any).ai?.fallbackOrder as string[]) || [
+      'avalai/gpt-5-mini',
+      'avalai/gpt-4o-mini',
+      'avalai/claude-4-opus',
+      'avalai/o3-pro',
+      'google/gemini-pro',
+      'google/gemini-1.5-flash'
+    ];
+    console.log('[generate-ai-code-stream] - context.sandboxId:', context?.sandboxId);
+    console.log('[generate-ai-code-stream] - context.currentFiles:', context?.currentFiles ? Object.keys(context.currentFiles) : 'none');
+    console.log('[generate-ai-code-stream] - currentFiles count:', context?.currentFiles ? Object.keys(context.currentFiles).length : 0);
+    
+    // Initialize conversation state if not exists
+    if (!global.conversationState) {
+      global.conversationState = {
+        conversationId: `conv-${Date.now()}`,
+        startedAt: Date.now(),
+        lastUpdated: Date.now(),
+        context: {
+          messages: [],
+          edits: [],
+          projectEvolution: { majorChanges: [] },
+          userPreferences: {}
+        }
+      };
+    }
+    
+    // Add user message to conversation history
+    const userMessage: ConversationMessage = {
+      id: `msg-${Date.now()}`,
+      role: 'user',
+      content: prompt,
+      timestamp: Date.now(),
+      metadata: {
+        sandboxId: context?.sandboxId
+      }
+    };
+    global.conversationState.context.messages.push(userMessage);
+    
+    // Clean up old messages to prevent unbounded growth
+    if (global.conversationState.context.messages.length > 20) {
+      // Keep only the last 15 messages
+      global.conversationState.context.messages = global.conversationState.context.messages.slice(-15);
+      console.log('[generate-ai-code-stream] Trimmed conversation history to prevent context overflow');
+    }
+    
+    // Clean up old edits
+    if (global.conversationState.context.edits.length > 10) {
+      global.conversationState.context.edits = global.conversationState.context.edits.slice(-8);
+    }
+    
+    // Debug: Show a sample of actual file content
+    if (context?.currentFiles && Object.keys(context.currentFiles).length > 0) {
+      const firstFile = Object.entries(context.currentFiles)[0];
+      console.log('[generate-ai-code-stream] - sample file:', firstFile[0]);
+      console.log('[generate-ai-code-stream] - sample content preview:', 
+        typeof firstFile[1] === 'string' ? firstFile[1].substring(0, 100) + '...' : 'not a string');
+    }
+    
+     if (!prompt) {
       return NextResponse.json(
         { error: 'Prompt is required' },
         { status: 400 }
