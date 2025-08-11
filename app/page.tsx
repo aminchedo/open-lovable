@@ -58,12 +58,17 @@ export default function AISandboxPage() {
   ]);
   const [aiChatInput, setAiChatInput] = useState('');
   const [aiEnabled] = useState(true);
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const [aiModel, setAiModel] = useState(() => {
-    const modelParam = searchParams.get('model');
-    return appConfig.ai.availableModels.includes(modelParam || '') ? modelParam! : appConfig.ai.defaultModel;
-  });
+  const [aiModel, setAiModel] = useState(appConfig.ai.defaultModel);
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const modelParam = params.get('model');
+      if (modelParam && appConfig.ai.availableModels.includes(modelParam)) {
+        setAiModel(modelParam);
+      }
+    } catch {}
+  }, []);
   const [urlOverlayVisible, setUrlOverlayVisible] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [urlStatus, setUrlStatus] = useState<string[]>([]);
@@ -150,7 +155,7 @@ export default function AISandboxPage() {
       }
       
       // Check if sandbox ID is in URL
-      const sandboxIdParam = searchParams.get('sandbox');
+      const sandboxIdParam = (() => { try { return new URLSearchParams(window.location.search).get('sandbox'); } catch { return null; } })();
       
       if (sandboxIdParam) {
         // Try to restore existing sandbox
@@ -381,10 +386,10 @@ export default function AISandboxPage() {
         log(`URL: ${data.url}`);
         
         // Update URL with sandbox ID
-        const newParams = new URLSearchParams(searchParams.toString());
-        newParams.set('sandbox', data.sandboxId);
-        newParams.set('model', aiModel);
-        router.push(`/?${newParams.toString()}`, { scroll: false });
+        const currentParams = (() => { try { return new URLSearchParams(window.location.search); } catch { return new URLSearchParams(); } })();
+        currentParams.set('sandbox', data.sandboxId);
+        currentParams.set('model', aiModel);
+        router.push(`/?${currentParams.toString()}`, { scroll: false });
         
         // Fade out loading background after sandbox loads
         setTimeout(() => {
@@ -513,12 +518,12 @@ Tip: I automatically detect and install npm packages from your code imports (lik
                       stage: 'installing', 
                       packages: data.packages 
                     });
-                  } else if (data.message.includes('Creating files') || data.message.includes('Applying')) {
-                    setCodeApplicationState({ 
-                      stage: 'applying',
-                      filesGenerated: results.filesCreated 
-                    });
-                  }
+                                      } else if (data.message.includes('Creating files') || data.message.includes('Applying')) {
+                      setCodeApplicationState({ 
+                        stage: 'applying',
+                        filesGenerated: data.filesCreated || 0
+                      });
+                    }
                   break;
                   
                 case 'package-progress':
@@ -677,22 +682,22 @@ Tip: I automatically detect and install npm packages from your code imports (lik
           log(data.explanation);
         }
         
-        if (data.autoCompleted) {
+        if ((data as any).autoCompleted) {
           log('Auto-generating missing components...', 'command');
           
-          if (data.autoCompletedComponents) {
+          if ((data as any).autoCompletedComponents) {
             setTimeout(() => {
               log('Auto-generated missing components:', 'info');
-              data.autoCompletedComponents.forEach((comp: string) => {
+              (data as any).autoCompletedComponents.forEach((comp: string) => {
                 log(`  ${comp}`, 'command');
               });
             }, 1000);
           }
-        } else if (data.warning) {
-          log(data.warning, 'error');
+        } else if ((data as any).warning) {
+          log((data as any).warning, 'error');
           
-          if (data.missingImports && data.missingImports.length > 0) {
-            const missingList = data.missingImports.join(', ');
+          if ((data as any).missingImports && (data as any).missingImports.length > 0) {
+            const missingList = (data as any).missingImports.join(', ');
             addChatMessage(
               `Ask me to "create the missing components: ${missingList}" to fix these import errors.`,
               'system'
@@ -702,7 +707,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
         
         log('Code applied successfully!');
         console.log('[applyGeneratedCode] Response data:', data);
-        console.log('[applyGeneratedCode] Debug info:', data.debug);
+        console.log('[applyGeneratedCode] Debug info:', (data as any).debug);
         console.log('[applyGeneratedCode] Current sandboxData:', sandboxData);
         console.log('[applyGeneratedCode] Current iframe element:', iframeRef.current);
         console.log('[applyGeneratedCode] Current iframe src:', iframeRef.current?.src);
@@ -997,8 +1002,8 @@ Tip: I automatically detect and install npm packages from your code imports (lik
                       // Create a map of edited files
                       const editedFiles = new Set(
                         generationProgress.files
-                          .filter(f => f.edited)
-                          .map(f => f.path)
+                          .filter((f: any) => (f as any).edited)
+                          .map((f: any) => f.path)
                       );
                       
                       // Process all files from generation progress
@@ -1010,7 +1015,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
                         if (!fileTree[dir]) fileTree[dir] = [];
                         fileTree[dir].push({
                           name: fileName,
-                          edited: file.edited || false
+                          edited: (file as any).edited || false
                         });
                       });
                       
@@ -1630,13 +1635,12 @@ Tip: I automatically detect and install npm packages from your code imports (lik
                           // Update existing file and mark as edited
                           updatedState.files = [
                             ...updatedState.files.slice(0, existingFileIndex),
-                            {
+                            ({
                               ...updatedState.files[existingFileIndex],
                               content: fileContent.trim(),
                               type: fileType,
-                              completed: true,
-                              edited: true
-                            },
+                              completed: true
+                            } as any),
                             ...updatedState.files.slice(existingFileIndex + 1)
                           ];
                         } else {
@@ -1645,9 +1649,8 @@ Tip: I automatically detect and install npm packages from your code imports (lik
                             path: filePath,
                             content: fileContent.trim(),
                             type: fileType,
-                            completed: true,
-                            edited: false
-                          }];
+                            completed: true
+                          } as any];
                         }
                         
                         // Only show file status if not in edit mode
@@ -2567,13 +2570,12 @@ Focus on the key sections and content, making it clean and modern.`;
                           // Update existing file and mark as edited
                           updatedState.files = [
                             ...updatedState.files.slice(0, existingFileIndex),
-                            {
+                            ({
                               ...updatedState.files[existingFileIndex],
                               content: fileContent.trim(),
                               type: fileType,
-                              completed: true,
-                              edited: true
-                            },
+                              completed: true
+                            } as any),
                             ...updatedState.files.slice(existingFileIndex + 1)
                           ];
                         } else {
@@ -2582,9 +2584,8 @@ Focus on the key sections and content, making it clean and modern.`;
                             path: filePath,
                             content: fileContent.trim(),
                             type: fileType,
-                            completed: true,
-                            edited: false
-                          }];
+                            completed: true
+                          } as any];
                         }
                         
                         // Only show file status if not in edit mode
@@ -2963,7 +2964,7 @@ Focus on the key sections and content, making it clean and modern.`;
                   onChange={(e) => {
                     const newModel = e.target.value;
                     setAiModel(newModel);
-                    const params = new URLSearchParams(searchParams);
+                    const params = (() => { try { return new URLSearchParams(window.location.search); } catch { return new URLSearchParams(); } })();
                     params.set('model', newModel);
                     if (sandboxData?.sandboxId) {
                       params.set('sandbox', sandboxData.sandboxId);
@@ -2977,7 +2978,7 @@ Focus on the key sections and content, making it clean and modern.`;
                 >
                   {appConfig.ai.availableModels.map(model => (
                     <option key={model} value={model}>
-                      {appConfig.ai.modelDisplayNames[model] || model}
+                      {(appConfig.ai.modelDisplayNames as any)[model] || model}
                     </option>
                   ))}
                 </select>
@@ -3002,7 +3003,7 @@ Focus on the key sections and content, making it clean and modern.`;
             onChange={(e) => {
               const newModel = e.target.value;
               setAiModel(newModel);
-              const params = new URLSearchParams(searchParams);
+              const params = (() => { try { return new URLSearchParams(window.location.search); } catch { return new URLSearchParams(); } })();
               params.set('model', newModel);
               if (sandboxData?.sandboxId) {
                 params.set('sandbox', sandboxData.sandboxId);
@@ -3013,7 +3014,7 @@ Focus on the key sections and content, making it clean and modern.`;
           >
             {appConfig.ai.availableModels.map(model => (
               <option key={model} value={model}>
-                {appConfig.ai.modelDisplayNames[model] || model}
+                {(appConfig.ai.modelDisplayNames as any)[model] || model}
               </option>
             ))}
           </select>
