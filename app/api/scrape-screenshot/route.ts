@@ -34,23 +34,26 @@ export async function POST(request: NextRequest) {
 
     console.log('[scrape-screenshot] Processing URL:', url);
 
-    const { FirecrawlApp } = await import('@mendable/firecrawl-js');
+    const firecrawlModule = await import('@mendable/firecrawl-js');
+    const Firecrawl = firecrawlModule.default;
     
     // Explicit API key configuration
-    const app = new FirecrawlApp({ 
+    const app = new Firecrawl({ 
       apiKey: firecrawlApiKey 
     });
     
-    const screenshotResponse = await app.screenshot(url, {
+    // Use scrapeUrl with screenshot format
+    const screenshotResponse = await app.scrapeUrl(url, {
+      formats: ['screenshot', 'screenshot@fullPage'],
       waitFor: 3000,
-      fullPage: true,
+      timeout: 20000,
     });
 
     console.log('[scrape-screenshot] Screenshot captured successfully');
 
     return NextResponse.json({
       success: true,
-      screenshot: screenshotResponse.screenshot,
+      screenshot: (screenshotResponse as any)?.data?.[0]?.screenshot || (screenshotResponse as any)?.screenshot,
       url: url,
     });
 

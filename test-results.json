@@ -1,0 +1,118 @@
+{
+  "timestamp": "2025-08-11T19:54:39.494Z",
+  "environment": "local",
+  "tests": [
+    {
+      "name": "Environment Debug",
+      "endpoint": "/api/debug",
+      "method": "GET",
+      "status": 200,
+      "success": true,
+      "duration": 233,
+      "response": {
+        "status": "healthy",
+        "environment": {
+          "E2B_API_KEY": {
+            "exists": true,
+            "length": 44,
+            "format": "Valid"
+          },
+          "FIRECRAWL_API_KEY": {
+            "exists": true,
+            "length": 35,
+            "format": "Valid"
+          },
+          "AVALAI_API_KEY": {
+            "exists": true,
+            "length": 51,
+            "format": "Valid"
+          },
+          "GOOGLE_GENERATIVE_AI_API_KEY": {
+            "exists": true,
+            "length": 39,
+            "format": "Valid"
+          },
+          "GROQ_API_KEY": {
+            "exists": true,
+            "length": 25
+          },
+          "NODE_ENV": "development",
+          "timestamp": "2025-08-11T19:54:39.727Z"
+        },
+        "issues": [],
+        "message": "All environment variables configured"
+      },
+      "timestamp": "2025-08-11T19:54:39.732Z"
+    },
+    {
+      "name": "E2B Sandbox Creation",
+      "endpoint": "/api/create-ai-sandbox",
+      "method": "POST",
+      "status": 401,
+      "success": false,
+      "duration": 498,
+      "response": {
+        "error": "Invalid E2B API key. Check environment variables."
+      },
+      "timestamp": "2025-08-11T19:54:40.231Z"
+    },
+    {
+      "name": "Firecrawl Screenshot",
+      "endpoint": "/api/scrape-screenshot",
+      "method": "POST",
+      "status": 500,
+      "success": false,
+      "duration": 532,
+      "response": {
+        "error": "Screenshot failed",
+        "details": "Failed to scrape URL. Status code: 400. Error: Bad Request - [{\"code\":\"custom\",\"message\":\"You may only specify either screenshot or screenshot@fullPage\",\"path\":[\"formats\"]}]"
+      },
+      "timestamp": "2025-08-11T19:54:40.764Z"
+    },
+    {
+      "name": "Firecrawl Enhanced Scraping",
+      "endpoint": "/api/scrape-url-enhanced",
+      "method": "POST",
+      "status": 200,
+      "success": true,
+      "duration": 4970,
+      "response": {
+        "success": true,
+        "data": {
+          "success": true,
+          "markdown": "Example Domain",
+          "metadata": {
+            "viewport": "width=device-width, initial-scale=1",
+            "title": "Example Domain",
+            "scrapeId": "2e824880-6d24-4181-8886-6958cd0e130c",
+            "sourceURL": "https://example.com",
+            "url": "https://example.com/",
+            "statusCode": 200,
+            "contentType": "text/html",
+            "proxyUsed": "basic",
+            "creditsUsed": 1
+          },
+          "html": "<html><body><div><title>Example Domain</title></div></body></html>"
+        },
+        "url": "https://example.com"
+      },
+      "timestamp": "2025-08-11T19:54:45.734Z"
+    },
+    {
+      "name": "AI Code Generation",
+      "endpoint": "/api/generate-ai-code-stream",
+      "method": "POST",
+      "status": 200,
+      "success": true,
+      "duration": 374,
+      "response": null,
+      "timestamp": "2025-08-11T19:54:58.517Z"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 3,
+    "failed": 2,
+    "successRate": 60
+  }
+}
