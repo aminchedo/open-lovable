@@ -1,13 +1,16 @@
 {
   "version": 2,
+  "buildCommand": "npm install --legacy-peer-deps && npm run build",
+  "installCommand": "npm install --legacy-peer-deps",
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/next"
+      "use": "@vercel/next",
+      "config": {
+        "installCommand": "npm install --legacy-peer-deps"
+      }
     }
   ],
-  "buildCommand": "npm install --legacy-peer-deps && npm run build",
-  "installCommand": "npm install --legacy-peer-deps",
   "functions": {
     "app/api/**/*": {
       "maxDuration": 30
